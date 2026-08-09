@@ -1,0 +1,13 @@
+# Normalize text files in the repository.
+* text=auto
+
+# Source and project configuration.
+*.py text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Documentation and metadata.
+*.md text eol=lf
+*.txt text eol=lf
+LICENSE text eol=lf
