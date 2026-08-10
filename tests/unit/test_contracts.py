@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from test_repair_engine.contracts import (
     CartographerTraceability,
+    LocatorKind,
     ProjectReference,
     RepairAction,
     RepairMethod,
@@ -18,12 +19,16 @@ from test_repair_engine.contracts import TestOutcome as RepairTestOutcome
 pytestmark = pytest.mark.unit
 
 
+VALID_FINGERPRINT = "a" * 64
+
+
 def test_repair_request_can_exist_without_cartographer() -> None:
     request = RepairRequest(
         action=RepairAction.FILL,
-        original_locator="[data-testid='search-input']",
+        original_locator="search-input",
     )
 
+    assert request.locator_kind is LocatorKind.TEST_ID
     assert request.project_reference is None
     assert request.cartographer_traceability is None
 
@@ -31,11 +36,11 @@ def test_repair_request_can_exist_without_cartographer() -> None:
 def test_repair_request_can_carry_opaque_cartographer_references() -> None:
     request = RepairRequest(
         action=RepairAction.CLICK,
-        original_locator="[data-testid='search-submit']",
+        original_locator="search-submit",
         project_reference=ProjectReference(
-            profile_id="project-profile-main",
-            revision=2,
-            configuration_fingerprint="configuration-fingerprint-value",
+            project_profile_id="project-profile-main",
+            project_profile_revision=2,
+            configuration_fingerprint=VALID_FINGERPRINT,
         ),
         cartographer_traceability=CartographerTraceability(
             context_id="context-search",
@@ -45,16 +50,25 @@ def test_repair_request_can_carry_opaque_cartographer_references() -> None:
     )
 
     assert request.project_reference is not None
-    assert request.project_reference.revision == 2
+    assert request.project_reference.project_profile_revision == 2
     assert request.cartographer_traceability is not None
     assert request.cartographer_traceability.element_id == "element-search-submit"
+
+
+def test_project_reference_requires_canonical_sha256_fingerprint() -> None:
+    with pytest.raises(ValidationError, match="configuration_fingerprint"):
+        ProjectReference(
+            project_profile_id="project-profile-main",
+            project_profile_revision=2,
+            configuration_fingerprint="not-a-sha256",
+        )
 
 
 def test_contracts_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         RepairRequest(
             action=RepairAction.CLICK,
-            original_locator="[data-testid='search-submit']",
+            original_locator="search-submit",
             unexpected_field="must-not-be-accepted",
         )
 
@@ -67,6 +81,7 @@ def test_recovered_result_requires_replacement_locator() -> None:
         RepairResult(
             outcome=RepairOutcome.RECOVERED,
             repair_method=RepairMethod.HEURISTIC,
+            candidate_count=1,
         )
 
 
@@ -77,7 +92,20 @@ def test_recovered_result_requires_repair_method() -> None:
     ):
         RepairResult(
             outcome=RepairOutcome.RECOVERED,
-            replacement_locator="[data-testid='catalog-search-input']",
+            replacement_locator="catalog-search-input",
+            candidate_count=1,
+        )
+
+
+def test_recovered_result_requires_candidate_evidence() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="at least one candidate",
+    ):
+        RepairResult(
+            outcome=RepairOutcome.RECOVERED,
+            replacement_locator="catalog-search-input",
+            repair_method=RepairMethod.HEURISTIC,
         )
 
 
@@ -96,9 +124,11 @@ def test_repair_record_separates_runtime_and_final_test_result() -> None:
         run_id="run-001",
         test_node_id="tests/e2e/test_search.py::test_product_search",
         action=RepairAction.FILL,
-        original_locator="[data-testid='search-input']",
-        replacement_locator="[data-testid='catalog-search-input']",
+        original_locator="search-input",
+        replacement_locator="catalog-search-input",
         repair_method=RepairMethod.HEURISTIC,
+        candidate_count=1,
+        selected_score=0.91,
         runtime_result=RepairOutcome.RECOVERED,
     )
 
@@ -114,7 +144,8 @@ def test_recovered_record_requires_consistent_repair_evidence() -> None:
         RepairRecord(
             run_id="run-001",
             action=RepairAction.FILL,
-            original_locator="[data-testid='search-input']",
+            original_locator="search-input",
             repair_method=RepairMethod.HEURISTIC,
+            candidate_count=1,
             runtime_result=RepairOutcome.RECOVERED,
         )

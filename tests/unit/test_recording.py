@@ -17,20 +17,25 @@ from test_repair_engine.recording import load_repair_record, write_repair_record
 pytestmark = pytest.mark.unit
 
 
+VALID_FINGERPRINT = "a" * 64
+
+
 def test_repair_record_round_trip(tmp_path: Path) -> None:
     original = RepairRecord(
         run_id="run-001",
         test_node_id="tests/e2e/test_search.py::test_product_search",
         action=RepairAction.FILL,
-        original_locator="[data-testid='search-input']",
-        replacement_locator="[data-testid='catalog-search-input']",
+        original_locator="search-input",
+        replacement_locator="catalog-search-input",
         repair_method=RepairMethod.HEURISTIC,
+        candidate_count=1,
+        selected_score=0.91,
         runtime_result=RepairOutcome.RECOVERED,
         test_result=RepairTestOutcome.PASSED,
         project_reference=ProjectReference(
-            profile_id="project-profile-main",
-            revision=2,
-            configuration_fingerprint="configuration-fingerprint-value",
+            project_profile_id="project-profile-main",
+            project_profile_revision=2,
+            configuration_fingerprint=VALID_FINGERPRINT,
         ),
     )
 
@@ -46,7 +51,7 @@ def test_writer_creates_parent_directory(tmp_path: Path) -> None:
     record = RepairRecord(
         run_id="run-002",
         action=RepairAction.CLICK,
-        original_locator="[data-testid='search-submit']",
+        original_locator="search-submit",
         runtime_result=RepairOutcome.FAILED,
     )
 
@@ -61,7 +66,7 @@ def test_persisted_record_contains_schema_version(tmp_path: Path) -> None:
     record = RepairRecord(
         run_id="run-003",
         action=RepairAction.CLICK,
-        original_locator="[data-testid='search-submit']",
+        original_locator="search-submit",
         runtime_result=RepairOutcome.ESCALATED,
     )
 

@@ -11,30 +11,31 @@ Its job is deliberately narrow:
 > test prove the fix.
 
 The project prioritizes practical repair effectiveness, low operational cost,
-and simple integration over research into whether a particular recovery
-mechanism is theoretically necessary.
+and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 0 — project skeleton and ecosystem contracts.**
+**Sprint 1 — deterministic `data-testid` locator recovery.**
 
-Current capabilities:
+Current implementation includes:
 
 - installable Python package,
 - strict repair contracts,
-- optional TestCartographer traceability,
-- versioned `RepairRecord`,
-- deterministic JSON persistence,
-- unit tests and CI.
+- exact opaque ProjectProfile identity compatible with the current
+  TestCartographer naming boundary,
+- deterministic `data-testid` candidate ranking,
+- action compatibility checks for `fill` and `click`,
+- bounded Playwright candidate collection,
+- one retry of the selected replacement,
+- opt-in pytest runtime integration,
+- final pytest outcome correlation,
+- versioned `RepairRecord` JSON persistence,
+- unit tests and a real-browser repair proof,
+- CI quality and browser-repair jobs.
 
-Runtime repair is **not implemented yet**.
-
-The first functional slice will repair one broken Playwright locator and allow
-the unchanged original test to continue.
+No LLM is used in Sprint 1.
 
 ## Ecosystem role
-
-TestRepairEngine is designed as one module in a wider test-automation lifecycle:
 
 ```text
 qa-automation-framework
@@ -67,25 +68,28 @@ Owns normal automation execution:
 
 Owns bounded runtime recovery:
 
-- detect a failed technical interaction,
-- identify a repair candidate,
-- retry the failed interaction,
-- allow the original test to continue,
-- record what was repaired and how.
+- inspect one failed technical interaction,
+- collect minimal candidate metadata,
+- select a deterministic replacement when evidence is strong enough,
+- retry the failed interaction once,
+- allow the unchanged original test to continue,
+- record what was repaired and how,
+- correlate the repair with the final pytest result.
 
 ### TestCartographer
 
 Owns broader engineering and durable maintenance:
 
-- application and process context,
+- project and application context,
+- evidence and provenance,
 - accepted element knowledge,
-- repository adaptation,
 - re-observation,
+- repository adaptation,
 - maintenance decisions,
 - durable updates to framework content.
 
-TestRepairEngine does not replace TestCartographer and does not own persistent
-application knowledge.
+TestRepairEngine does not import TestCartographer and does not decide whether a
+runtime repair should become a permanent source change.
 
 ## Product goal
 
@@ -96,30 +100,38 @@ validated repair evidence for durable maintenance by TestCartographer.
 
 ### Repair the smallest failure
 
-TestRepairEngine should repair the failed technical interaction rather than
-rewrite an entire test or Page Object.
+TestRepairEngine repairs the failed technical interaction rather than rewriting
+an entire test or Page Object.
 
 ### The original test remains the oracle
-
-A recovered interaction is not enough to declare success.
 
 ```text
 failed interaction
 -> runtime recovery
--> original test continues
+-> original test continues unchanged
 -> original assertions execute
 -> final pytest result
 ```
 
-Runtime recovery and final test success are separate facts.
+`runtime_result=RECOVERED` and `test_result=PASSED` are separate facts.
+
+### Abstain on ambiguity
+
+The deterministic selector does not choose merely because some candidate exists.
+It requires:
+
+- action-compatible structure,
+- a minimum similarity score,
+- a sufficient margin over the next candidate.
+
+If the evidence is weak or ambiguous, Sprint 1 returns control to the original
+failure. Sprint 2 may ask a bounded local LLM only in such unresolved cases.
 
 ### Cheap recovery before expensive recovery
 
-The intended v0.1 order is:
-
 ```text
 deterministic / heuristic repair
--> LLM fallback only when needed
+-> LLM fallback later
 -> escalation when repair cannot be validated
 ```
 
@@ -134,62 +146,97 @@ TestRepairEngine must not repair failures by:
 - applying unrestricted `force=True`,
 - retrying indefinitely.
 
-### Loose ecosystem coupling
+## Sprint 1 repair slice
 
-TestRepairEngine must work without importing TestCartographer.
+The first supported failure is controlled `data-testid` drift.
 
-When available, TestCartographer identifiers may be carried as opaque
-traceability metadata in a `RepairRecord`.
+Example:
 
-## v0.1 scope
+```text
+Page Object expects:
+search-input
 
-The first product version focuses on:
+application now exposes:
+catalog-search-input
+```
 
-- Python 3.11+,
-- pytest,
-- Playwright,
-- UI automation,
-- locator drift,
-- `click` and `fill` interactions,
-- deterministic/heuristic repair first,
-- local Ollama fallback later.
+For a `fill` action, TestRepairEngine:
 
-Out of scope for the initial slice:
+1. collects up to 50 elements carrying `data-testid`,
+2. stores no input values, text, HTML, screenshots, or credentials,
+3. rejects candidates that are not structurally compatible with `fill`,
+4. ranks the remaining test IDs by token overlap and string similarity,
+5. selects only a unique candidate above the configured deterministic gates,
+6. retries the original fill once with the replacement test ID,
+7. registers a `RepairRecord`,
+8. lets pytest finish the unchanged original test,
+9. persists `test_result=passed` or `failed` after teardown.
 
-- API/SOM repair,
-- assertion repair,
-- business-rule repair,
-- automatic expected-result changes,
-- automatic test-data correction,
-- arbitrary source-code rewriting,
-- autonomous application-defect diagnosis.
+## pytest activation
+
+Installing the package registers a lightweight pytest plugin.
+
+Runtime repair remains disabled unless explicitly enabled:
+
+```powershell
+python -m pytest --test-repair-engine
+```
+
+Repair records default to:
+
+```text
+repair-records/
+```
+
+A different directory may be selected with:
+
+```powershell
+python -m pytest `
+    --test-repair-engine `
+    --test-repair-record-dir artifacts/repair-records
+```
+
+When the flag is absent, TestRepairEngine does not attempt runtime repair.
 
 ## Repair evidence
 
-A successful runtime repair produces a versioned `RepairRecord`.
+A Sprint 1 `RepairRecord` can contain:
 
-The record distinguishes:
+- run ID,
+- pytest node ID,
+- action,
+- locator kind,
+- original test ID,
+- replacement test ID when selected,
+- heuristic repair method,
+- bounded candidate count,
+- selected deterministic score,
+- runtime outcome,
+- final pytest outcome,
+- optional TestCartographer traceability.
+
+Runtime interaction values are deliberately absent.
+
+## TestCartographer traceability
+
+The optional project reference uses:
 
 ```text
-runtime_result
--> was the failed interaction recovered?
-
-test_result
--> did the complete original test pass?
+project_profile_id
+project_profile_revision
+configuration_fingerprint
 ```
 
-It may also carry optional references to the TestCartographer project and
-context that existed when the repair happened.
-
-TestRepairEngine does not interpret whether those references are still current.
-That belongs to TestCartographer.
+TestRepairEngine treats these values as opaque identity only. TestCartographer
+owns compatibility decisions such as re-observation, repository resnapshot, or
+review after project configuration changes.
 
 ## Development
 
-Create a virtual environment:
+Create and activate a virtual environment:
 
 ```powershell
-py -3.11 -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
@@ -200,40 +247,54 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
+Install Chromium for the real-browser gate:
+
+```powershell
+python -m playwright install chromium
+```
+
 Run quality checks:
 
 ```powershell
+ruff format .
 ruff check .
 ruff format --check .
 python -m compileall -q src tests
 python -m pytest -m unit -v
+python -m pytest -m e2e -v
 ```
+
+## Sprint 1 acceptance
+
+Repository-level implementation acceptance requires:
+
+```text
+unit suite                         PASS
+real-browser baseline drift       reproduced
+real-browser deterministic repair PASS
+RepairRecord runtime_result       recovered
+RepairRecord test_result          passed
+```
+
+The final Sprint 1 ecosystem gate additionally uses the unchanged
+`qa-automation-framework` e-commerce test with a controlled search-input drift.
+The framework integration is kept separate so the engine can be validated before
+another repository is changed.
 
 ## Roadmap
 
-### Sprint 0
+### Sprint 0 — complete
 
 Executable project skeleton and ecosystem contracts.
 
-### Sprint 1
+### Sprint 1 — current
 
-Repair one controlled `data-testid` drift in `qa-automation-framework` using a
-deterministic heuristic and prove:
-
-```text
-repair disabled
--> original test FAIL
-
-repair enabled
--> failed interaction recovered
--> unchanged original test PASS
--> RepairRecord produced
-```
+Deterministic `data-testid` locator recovery and unchanged-test validation.
 
 ### Sprint 2
 
-Add Ollama as a fallback when deterministic candidate selection cannot resolve
-the failure confidently.
+Add Ollama only when deterministic selection cannot resolve an otherwise
+repairable locator failure safely.
 
 ## License
 

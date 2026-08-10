@@ -32,6 +32,12 @@ class RepairAction(StrEnum):
     FILL = "fill"
 
 
+class LocatorKind(StrEnum):
+    """Locator families currently understood by TestRepairEngine."""
+
+    TEST_ID = "test_id"
+
+
 class RepairMethod(StrEnum):
     """Mechanism that produced a repair candidate."""
 
@@ -57,18 +63,15 @@ class TestOutcome(StrEnum):
 
 
 class ProjectReference(StrictContract):
-    """Opaque reference to the TestCartographer project configuration.
+    """Opaque TestCartographer ProjectProfile identity used for one repair.
 
-    TestRepairEngine records this identity when it is supplied by the
-    surrounding ecosystem.
-
-    It does not interpret ProjectProfile compatibility, invalidation,
-    environment changes, or workspace drift.
+    Field names intentionally match the bounded ProjectProfile reference naming
+    used by TestCartographer, while the two packages remain independent.
     """
 
-    profile_id: str = Field(min_length=1)
-    revision: int = Field(ge=1)
-    configuration_fingerprint: str = Field(min_length=1)
+    project_profile_id: str = Field(min_length=1)
+    project_profile_revision: int = Field(ge=1)
+    configuration_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CartographerTraceability(StrictContract):
@@ -91,6 +94,7 @@ class RepairRequest(StrictContract):
     """
 
     action: RepairAction
+    locator_kind: LocatorKind = LocatorKind.TEST_ID
     original_locator: str = Field(min_length=1)
 
     test_node_id: str | None = None
@@ -107,6 +111,8 @@ class RepairResult(StrictContract):
     outcome: RepairOutcome
     replacement_locator: str | None = None
     repair_method: RepairMethod | None = None
+    candidate_count: int = Field(default=0, ge=0)
+    selected_score: float | None = Field(default=None, ge=0.0, le=1.0)
     reason: str | None = None
 
     @model_validator(mode="after")
@@ -118,6 +124,8 @@ class RepairResult(StrictContract):
                 raise ValueError("A recovered repair result requires replacement_locator.")
             if self.repair_method is None:
                 raise ValueError("A recovered repair result requires repair_method.")
+            if self.candidate_count < 1:
+                raise ValueError("A recovered repair result requires at least one candidate.")
 
         return self
 
@@ -126,10 +134,8 @@ class RepairRecord(StrictContract):
     """Persistable evidence describing one repair attempt.
 
     Runtime repair success and final test success are intentionally separate.
-
-    Recovering one Playwright interaction does not prove that the original
-    test passed. A later pytest integration will update ``test_result`` after
-    the complete test finishes.
+    The pytest integration finalizes ``test_result`` only after the unchanged
+    original test finishes.
     """
 
     schema_version: Literal["0.1"] = "0.1"
@@ -138,12 +144,18 @@ class RepairRecord(StrictContract):
     run_id: str = Field(min_length=1)
 
     test_node_id: str | None = None
+    page_object: str | None = None
+    method_name: str | None = None
 
     action: RepairAction
+    locator_kind: LocatorKind = LocatorKind.TEST_ID
     original_locator: str = Field(min_length=1)
     replacement_locator: str | None = None
 
     repair_method: RepairMethod | None = None
+    candidate_count: int = Field(default=0, ge=0)
+    selected_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    reason: str | None = None
     runtime_result: RepairOutcome
     test_result: TestOutcome = TestOutcome.UNKNOWN
 
@@ -159,5 +171,7 @@ class RepairRecord(StrictContract):
                 raise ValueError("A recovered repair record requires replacement_locator.")
             if self.repair_method is None:
                 raise ValueError("A recovered repair record requires repair_method.")
+            if self.candidate_count < 1:
+                raise ValueError("A recovered repair record requires at least one candidate.")
 
         return self

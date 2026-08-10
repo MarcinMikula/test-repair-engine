@@ -5,7 +5,8 @@
 TestRepairEngine is judged primarily by whether it restores broken automation
 without weakening the original test.
 
-Testing therefore verifies both internal contracts and real runtime outcomes.
+Testing therefore verifies both internal decision logic and real runtime
+behavior.
 
 ## Quality objective
 
@@ -18,65 +19,82 @@ The central product question is:
 
 ### Unit
 
-Fast deterministic tests for:
+Fast deterministic tests cover:
 
-- contracts,
-- validation,
-- candidate-scoring logic,
-- parsers,
-- persistence,
-- bounded policies.
+- strict contracts,
+- ProjectProfile traceability shape,
+- locator tokenization and scoring,
+- action compatibility,
+- ambiguity abstention,
+- Playwright adapter orchestration with bounded fakes,
+- runtime repair registration,
+- final test-outcome correlation,
+- RepairRecord persistence.
 
-Unit tests use no browser or external model.
-
-### Integration
-
-Tests across component boundaries, for example:
-
-```text
-failure evidence
--> candidate finder
--> repair result
--> RepairRecord
-```
-
-or later:
-
-```text
-provider
--> structured response
--> candidate validation
-```
+Unit tests start no browser and use no external model.
 
 ### E2E
 
-Real Playwright execution is required for every runtime-repair feature.
+Real Playwright execution is required for runtime-repair capability.
 
-The expected pattern is:
+Sprint 1 contains two browser proofs against a controlled page:
 
 ```text
-controlled broken application state
--> original test FAILS without repair
--> enable TestRepairEngine
--> repair occurs
--> original unchanged test PASSES
+old search-input
+new catalog-search-input
 ```
 
-Mocks alone cannot close a runtime-repair feature.
+Baseline proof:
 
-## Sprint 0 verification
+```text
+repair not used
+-> Playwright lookup/fill with search-input
+-> timeout
+```
 
-Sprint 0 verifies:
+Repair proof:
 
-- package installation,
-- strict contract validation,
-- optional ecosystem traceability,
-- successful `RepairRecord` JSON round trip,
-- static code quality,
-- Python compilation,
-- CI execution on supported Python versions.
+```text
+current DOM contains catalog-search-input
+-> deterministic candidate collection
+-> fill compatibility filter
+-> unique heuristic selection
+-> retry succeeds
+-> input contains original runtime value
+-> RepairRecord runtime_result = recovered
+-> finalized test_result = passed
+```
 
-Sprint 0 intentionally does not claim repair capability.
+The runtime value is used by the retry callback but is absent from persisted
+repair evidence.
+
+### Ecosystem acceptance
+
+Repository-level E2E proof is necessary but not sufficient to close Sprint 1.
+
+The final acceptance uses the current `qa-automation-framework` e-commerce POM
+flow because the product boundary is intended to sit below concrete Page
+Objects.
+
+The acceptance sequence is:
+
+```text
+unchanged EcommerceSearchPage expects search-input
+controlled demo target exposes catalog-search-input
+
+TRE disabled
+-> original framework test FAIL
+
+TRE enabled
+-> BasePage failure hook delegates to TRE
+-> same fill action recovers
+-> original framework test continues unchanged
+-> existing assertions PASS
+-> RepairRecord produced
+```
+
+The controlled target drift belongs to the acceptance setup, not a permanent
+framework product change.
 
 ## STLC alignment
 
@@ -87,37 +105,56 @@ test analysis
 -> define one failure and expected recovery
 
 test planning
--> define scope, environment, tools, and exit criteria
+-> define scope, environment, evidence and exit criteria
 
 test design
--> define fail-before and pass-after scenarios
+-> define fail-before, pass-after, ambiguity and failure cases
 
 environment preparation
 -> prepare controlled Playwright target
 
 test execution
--> run baseline and repaired scenario
+-> run baseline and repaired scenarios
 
 exit evaluation
 -> verify original test and RepairRecord
 
 closure
--> record only evidence needed for future maintenance
+-> keep only evidence needed for maintenance
 ```
 
-## Feature exit criteria
+## Sprint 1 exit criteria
 
-A runtime-repair feature is not complete until all applicable conditions hold:
+Sprint 1 is complete only when all applicable checks pass:
 
-- unit tests pass,
-- integration tests pass where a component boundary exists,
-- baseline failure is reproduced,
-- runtime repair is observed,
-- original test remains unchanged,
-- original assertions execute,
-- final test passes,
-- `RepairRecord` reflects the actual repair,
-- existing supported behavior does not regress.
+- package installs in a clean virtual environment,
+- Ruff lint passes,
+- Ruff format check passes,
+- Python compilation passes,
+- all unit tests pass,
+- real-browser baseline proves old test ID failure,
+- real-browser repair proves deterministic recovery,
+- ambiguous deterministic candidates cause abstention,
+- only one retry is performed,
+- no LLM is called,
+- no runtime input value is persisted,
+- `RepairRecord.runtime_result` is `recovered`,
+- `RepairRecord.test_result` is `passed` only after the original test completes,
+- current framework flow fails with controlled drift when TRE is disabled,
+- the same unchanged framework test passes when TRE is enabled.
+
+## CI
+
+The quality matrix runs on Python 3.11 and 3.12:
+
+- editable installation,
+- Ruff lint,
+- Ruff format check,
+- compileall,
+- unit tests.
+
+A separate Python 3.12 browser job installs Chromium and runs the E2E repair
+slice.
 
 ## Anti-cheating invariants
 
@@ -131,8 +168,13 @@ by:
 - using unrestricted forced interaction,
 - retrying indefinitely.
 
-## Current limitation
+## Deferred validation
 
-The project currently contains contracts and infrastructure only.
+Sprint 1 does not attempt to prove:
 
-No runtime repair capability exists in Sprint 0.
+- LLM fallback quality,
+- general selector healing,
+- timing/actionability repair,
+- pytest-xdist/process-safe correlation,
+- enterprise application coverage,
+- automatic durable source updates.

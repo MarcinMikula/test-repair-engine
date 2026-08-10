@@ -2,6 +2,7 @@
 
 from test_repair_engine.contracts import (
     CartographerTraceability,
+    LocatorKind,
     ProjectReference,
     RepairAction,
     RepairMethod,
@@ -14,6 +15,7 @@ from test_repair_engine.contracts import (
 
 __all__ = [
     "CartographerTraceability",
+    "LocatorKind",
     "ProjectReference",
     "RepairAction",
     "RepairMethod",
