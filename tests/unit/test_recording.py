@@ -62,6 +62,32 @@ def test_writer_creates_parent_directory(tmp_path: Path) -> None:
     assert destination.exists()
 
 
+def test_writer_rejects_existing_record_without_mutating_it(tmp_path: Path) -> None:
+    original = RepairRecord(
+        run_id="run-original",
+        action=RepairAction.CLICK,
+        original_locator="search-submit",
+        runtime_result=RepairOutcome.FAILED,
+    )
+    replacement = RepairRecord(
+        run_id="run-replacement",
+        action=RepairAction.CLICK,
+        original_locator="different-submit",
+        runtime_result=RepairOutcome.ESCALATED,
+    )
+    destination = tmp_path / "repair-record.json"
+
+    write_repair_record(original, destination)
+    original_bytes = destination.read_bytes()
+
+    with pytest.raises(FileExistsError):
+        write_repair_record(replacement, destination)
+
+    assert destination.read_bytes() == original_bytes
+    assert load_repair_record(destination) == original
+    assert list(tmp_path.glob(".repair-record.json.*.tmp")) == []
+
+
 def test_persisted_record_contains_schema_version(tmp_path: Path) -> None:
     record = RepairRecord(
         run_id="run-003",

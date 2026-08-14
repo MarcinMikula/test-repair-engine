@@ -29,7 +29,7 @@ Fast deterministic tests cover:
 - Playwright adapter orchestration with bounded fakes,
 - runtime repair registration,
 - final test-outcome correlation,
-- RepairRecord persistence.
+- RepairRecord persistence and collision-safe immutability.
 
 Unit tests start no browser and use no external model.
 
@@ -155,6 +155,45 @@ The quality matrix runs on Python 3.11 and 3.12:
 
 A separate Python 3.12 browser job installs Chromium and runs the E2E repair
 slice.
+
+## Evidence integrity
+
+Repair evidence is historical output, not scratch space.
+
+Persistence must therefore fail closed when a destination already exists. A
+second write must not replace an earlier RepairRecord, even if the caller
+supplies the same destination accidentally. Regression coverage verifies that:
+
+```text
+existing RepairRecord
+-> second write rejected
+-> original bytes unchanged
+-> temporary publish file removed
+```
+
+This is deliberately narrower than a general evidence-package system.
+TestRepairEngine still owns individual runtime repair records, while broader
+validation-run packaging and durable maintenance remain outside its runtime
+scope.
+
+## Future LLM and actionability validation rules
+
+Cross-project evidence from PhoenixQA establishes a useful authority boundary for
+future TestRepairEngine slices:
+
+```text
+LLM proposal
+-> deterministic validation against collected evidence
+-> runtime action only when the bounded policy allows it
+```
+
+Model confidence or persuasive reasoning text is not execution authority.
+
+For future timing/actionability recovery, evidence that a state *can* change
+(such as a declared CSS transition or animation) must not automatically be
+treated as evidence that the relevant state *is changing toward recovery*.
+Observed temporal change is stronger evidence. The exact observation policy
+remains future work and must be validated in TestRepairEngine before adoption.
 
 ## Anti-cheating invariants
 

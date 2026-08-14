@@ -185,3 +185,100 @@ nominal/external acceptance later
 If model or prompt tuning is needed after a failed run, the failed observation
 should remain part of the evidence rather than being overwritten by the final
 passing attempt.
+
+---
+
+## Cross-project lesson — persisted repair evidence must fail closed on collision
+
+**Review date:** 2026-08-14
+**Source evidence:** TestCartographer Issue #5 (`ACC-FIND-005`)
+
+### New evidence from TestCartographer
+
+An external-acceptance run exposed destructive startup behavior in
+TestCartographer: a pre-existing operator-supplied output directory was treated
+as disposable and recursively removed before a new run started.
+
+The filesystem stopped the operation with a permission error, but partial
+deletion could already have occurred. The acceptance finding therefore treated
+the run identifier as consumed/unsafe and required later runs to use new,
+immutable output locations.
+
+### Impact on TestRepairEngine
+
+TestRepairEngine does not delete its repair-record directory and normally writes
+UUID-named files, so it does not share the same bug directly.
+
+Reviewing the analogous boundary exposed a smaller weakness: the Sprint 1 writer
+published a temporary file with `replace()`. If a destination with the same
+`repair_id` already existed, historical repair evidence could therefore be
+silently replaced.
+
+A UUID collision is unlikely, but evidence integrity should not depend on that
+probability. Accidental reuse, replayed fixtures or future caller bugs should
+fail closed.
+
+### Decision
+
+A RepairRecord destination is immutable once created.
+
+Persistence now:
+
+```text
+serialize to a temporary file in the destination directory
+→ publish only if the destination does not exist
+→ collision raises FileExistsError
+→ existing evidence remains byte-for-byte unchanged
+→ temporary file is cleaned up
+```
+
+This remains an individual-record guarantee, not a new validation-package
+subsystem.
+
+---
+
+## Cross-project lesson — PhoenixQA is R&D evidence for runtime healer design
+
+**Review date:** 2026-08-14
+**Source evidence:** PhoenixQA Sprint 6B (`RECEIVES_EVENTS`, `VISIBLE`)
+
+PhoenixQA is intentionally broader and more experimental than TestRepairEngine,
+but its validated failures and mechanisms are relevant input to TRE design. TRE
+should reuse the lesson, not automatically copy the feature.
+
+### LLM diagnosis is not execution authority
+
+The live `RECEIVES_EVENTS` investigation showed a useful failure mode: the local
+model correctly described a persistent blocker with no dismiss affordance, yet
+still proposed `wait_and_retry`.
+
+A deterministic policy checked structured collector evidence and corrected the
+proposal to `no_safe_recovery`. The original Playwright failure then propagated
+unchanged.
+
+The important lesson for TRE Sprint 2 is:
+
+```text
+LLM proposes
+→ deterministic boundary validates
+→ only a validated bounded action may execute
+```
+
+Model confidence and reasoning text may be useful evidence, but they must not
+become the authority that permits a runtime side effect.
+
+### Declared capability is weaker than observed change
+
+The later `VISIBLE` slice identified another evidence-design distinction before
+shipping its policy: a CSS animation or transition declaration proves only that
+change is possible, not that a relevant state is actually progressing toward
+recovery.
+
+PhoenixQA therefore moved the VISIBLE evidence shape toward two real browser
+observations separated by wall-clock time and asks the deterministic policy
+whether target state actually changed.
+
+That principle is relevant to future TRE timing/actionability work, but the
+current PhoenixQA VISIBLE slice is not yet live-verified end to end. TRE should
+therefore preserve the lesson as a design constraint, not treat the exact
+1200 ms observation implementation as validated reusable product logic.
