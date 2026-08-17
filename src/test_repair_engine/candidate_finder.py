@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from enum import StrEnum
 
 from test_repair_engine.contracts import RepairAction
 
@@ -19,6 +20,7 @@ _CLICK_ROLES = {
     "switch",
     "tab",
 }
+_MAX_AMBIGUITY_CANDIDATES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,14 +43,31 @@ class ScoredCandidate:
     score: float
 
 
+class CandidateSelectionStatus(StrEnum):
+    """Machine-readable result of deterministic locator candidate selection."""
+
+    NO_CANDIDATES = "no_candidates"
+    BELOW_THRESHOLD = "below_threshold"
+    AMBIGUOUS = "ambiguous"
+    AMBIGUOUS_TOO_BROAD = "ambiguous_too_broad"
+    SELECTED = "selected"
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateSelection:
-    """Result of deterministic candidate selection."""
+    """Result of deterministic candidate selection.
 
+    ``shortlist`` is populated only for bounded ambiguity that a later fallback
+    may be allowed to inspect. It contains candidates without their deterministic
+    scores so a future provider does not inherit heuristic ranking as authority.
+    """
+
+    status: CandidateSelectionStatus
     candidate: LocatorCandidate | None
     score: float | None
     candidate_count: int
     reason: str
+    shortlist: tuple[LocatorCandidate, ...] = ()
 
 
 def tokenize_locator(value: str) -> tuple[str, ...]:
@@ -119,40 +138,64 @@ def select_candidate(
     *,
     minimum_score: float = 0.60,
     minimum_margin: float = 0.15,
+    maximum_ambiguity_candidates: int = _MAX_AMBIGUITY_CANDIDATES,
 ) -> CandidateSelection:
-    """Select one unique bounded candidate or abstain on weak/ambiguous evidence."""
+    """Select one unique bounded candidate or classify why selection abstained."""
+
+    if maximum_ambiguity_candidates < 2:
+        raise ValueError("maximum_ambiguity_candidates must be at least 2.")
 
     ranked = rank_candidates(original_test_id, action, candidates)
     candidate_count = len(ranked)
 
     if not ranked:
         return CandidateSelection(
+            status=CandidateSelectionStatus.NO_CANDIDATES,
             candidate=None,
             score=None,
             candidate_count=0,
             reason="No action-compatible data-testid candidates were found.",
         )
 
-    best = ranked[0]
-    if best.score < minimum_score:
+    eligible = [item for item in ranked if item.score >= minimum_score]
+    if not eligible:
         return CandidateSelection(
+            status=CandidateSelectionStatus.BELOW_THRESHOLD,
             candidate=None,
-            score=best.score,
+            score=ranked[0].score,
             candidate_count=candidate_count,
             reason="Best candidate score is below the deterministic threshold.",
         )
 
-    if len(ranked) > 1:
-        margin = best.score - ranked[1].score
-        if margin < minimum_margin:
-            return CandidateSelection(
-                candidate=None,
-                score=best.score,
-                candidate_count=candidate_count,
-                reason="Top candidates are too close for deterministic selection.",
-            )
+    best = eligible[0]
+    ambiguity = tuple(
+        item.candidate for item in eligible if (best.score - item.score) < minimum_margin
+    )
+
+    if len(ambiguity) > maximum_ambiguity_candidates:
+        return CandidateSelection(
+            status=CandidateSelectionStatus.AMBIGUOUS_TOO_BROAD,
+            candidate=None,
+            score=best.score,
+            candidate_count=candidate_count,
+            reason=(
+                "Too many candidates are within the deterministic ambiguity margin "
+                "for bounded fallback."
+            ),
+        )
+
+    if len(ambiguity) > 1:
+        return CandidateSelection(
+            status=CandidateSelectionStatus.AMBIGUOUS,
+            candidate=None,
+            score=best.score,
+            candidate_count=candidate_count,
+            reason="Top eligible candidates are too close for deterministic selection.",
+            shortlist=ambiguity,
+        )
 
     return CandidateSelection(
+        status=CandidateSelectionStatus.SELECTED,
         candidate=best.candidate,
         score=best.score,
         candidate_count=candidate_count,
