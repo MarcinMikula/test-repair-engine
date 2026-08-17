@@ -282,3 +282,130 @@ That principle is relevant to future TRE timing/actionability work, but the
 current PhoenixQA VISIBLE slice is not yet live-verified end to end. TRE should
 therefore preserve the lesson as a design constraint, not treat the exact
 1200 ms observation implementation as validated reusable product logic.
+
+---
+
+## Cross-project lesson — machine-assisted boundaries need one complete contract
+
+**Review date:** 2026-08-17
+**Source evidence:** TestCartographer `ACC-FIND-006`, `ACC-FIND-011`, `ACC-FIND-012`; acceptance requirements v0.2 (`ACC-REQ-020`)
+
+### New evidence from TestCartographer
+
+Level 1/1B external validation exposed three related machine-assisted boundary
+problems across separate real runs.
+
+First, browser-discovery metrics counted one live LLM call merely because Ollama
+mode was configured, even though no discovery guidance turn existed. The metric
+described configuration rather than an observed runtime event.
+
+Later, a target-proposal response parsed as valid JSON but failed the product
+contract before human review. The first diagnostic was too generic to identify a
+safe validation category or rule. After that boundary was made diagnosable and
+bounded recovery was introduced, the next live run exposed a deeper mismatch:
+the provider-facing schema, local action-conditioned validators and recovery
+classifier did not represent the same complete contract.
+
+This evidence is stronger than a theoretical concern because each limitation was
+revealed by a real execution path after the previous blocker had been crossed.
+
+### Impact on TestRepairEngine Sprint 2
+
+The bounded Ollama ambiguity fallback must keep one consistent contract across:
+
+```text
+provider-facing prompt/schema
+→ response parsing
+→ deterministic local validation
+→ execution allowlist
+```
+
+The model may select only from the candidate shortlist that TRE supplied. A
+syntactically valid answer is not sufficient if it violates that bounded
+contract.
+
+LLM outcomes must also remain diagnostically distinguishable. Sprint 2 should be
+able to tell apart at least:
+
+```text
+call failure
+provider timeout
+invalid JSON / parse failure
+schema or structured-contract failure
+explicit abstention
+selection outside the supplied allowlist
+validated selection
+```
+
+These are evidence states, not model-quality verdicts.
+
+### Decision
+
+1. The contract exposed to the provider must match the contract enforced by the
+   deterministic runtime boundary.
+2. LLM usage metrics must come from actual runtime events, not from provider
+   configuration or an enabled feature flag.
+3. An invalid LLM result does not start an LLM repair/reflection loop in TRE
+   Sprint 2. The result is classified, preserved as bounded evidence and the
+   original Playwright failure propagates.
+4. Sprint 2 keeps one Ollama proposal call and at most one runtime action retry
+   after deterministic validation.
+5. If a RepairRecord remains after abnormal test termination, it must not imply
+   that the unchanged original test was successfully validated. `test_result`
+   may remain unknown until later evidence justifies a richer terminal-state
+   contract.
+
+This is a Sprint 2 design constraint, not authorization for code changes before
+the sprint starts.
+
+---
+
+## Validation lesson — acceptance requirements evolve from execution evidence
+
+**Review date:** 2026-08-17
+**Source evidence:** TestCartographer acceptance requirements v0.2 and the findings that produced `ACC-REQ-018` through `ACC-REQ-020`
+
+### Observation
+
+TestCartographer did not attempt to predict every acceptance obligation before
+external validation began. Its initial acceptance basis was deliberately
+incomplete. Repeated real runs exposed material-intent preservation, truthful
+persisted lifecycle and machine-assisted contract/recovery obligations strongly
+enough to justify new explicit requirements.
+
+The historical runs kept their original identities and verdicts. New
+requirements were applied forward instead of being used to rewrite the meaning
+of evidence that had already been collected.
+
+### Decision for TestRepairEngine
+
+TRE validation will use the same evidence-driven principle without copying
+TestCartographer's requirement catalogue.
+
+The acceptance basis is intentionally incremental:
+
+```text
+start with enough requirements to test the current bounded capability
+→ execute real controlled and later nominal/external scenarios
+→ preserve failures, abstentions and friction
+→ identify a repeated or material requirement gap
+→ add or revise the smallest justified requirement/test oracle
+→ apply the new basis forward
+```
+
+Requirements are therefore not a frozen checklist created once and defended for
+the rest of the project. That would be fragile for a small evolving product: the
+initial basis may omit an important obligation, and real execution may expose a
+better boundary than design discussion alone could predict.
+
+At the same time, "incremental" does not mean moving the goalposts after every
+failure. New or revised requirements need evidence and a clear reason. Historical
+runs remain evaluated against the basis that existed when they were executed,
+unless a later review explicitly states otherwise.
+
+### Consequence
+
+TestRepairEngine keeps a lightweight iterative validation model: enough structure
+to preserve traceability and prevent self-rescue, but no requirement to maintain
+a permanently fixed corporate-style acceptance catalogue before the product has
+generated the evidence needed to deserve one.

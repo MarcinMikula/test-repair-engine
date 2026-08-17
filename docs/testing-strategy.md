@@ -195,6 +195,90 @@ treated as evidence that the relevant state *is changing toward recovery*.
 Observed temporal change is stronger evidence. The exact observation policy
 remains future work and must be validated in TestRepairEngine before adoption.
 
+### Sprint 2 machine-assisted contract rules
+
+Cross-project acceptance findings from TestCartographer add stricter rules for
+the planned bounded Ollama ambiguity fallback.
+
+The provider-facing contract, structured response parser, deterministic local
+validation and execution allowlist must describe the same bounded decision space.
+A model may select only a candidate that TRE supplied in the ambiguity shortlist;
+it may not invent a replacement locator.
+
+The runtime evidence must distinguish materially different LLM outcomes instead
+of collapsing them into a generic "LLM failed" result. At minimum the Sprint 2
+design must preserve enough information to tell apart:
+
+```text
+call failure
+provider timeout
+invalid JSON / parse failure
+structured-contract or schema failure
+explicit abstention
+selection outside the supplied allowlist
+validated selection
+```
+
+LLM usage metrics must be derived from actual runtime events. Enabling Ollama or
+configuring a model does not count as a provider call.
+
+Sprint 2 deliberately does not add an LLM repair/reflection loop:
+
+```text
+deterministic ambiguity
+-> one Ollama proposal call
+-> deterministic validation
+
+validated selection
+-> at most one runtime action retry
+
+invalid / timed out / abstained / outside allowlist
+-> preserve classified evidence
+-> no second LLM call
+-> original Playwright failure propagates
+```
+
+If abnormal test termination occurs after a repair attempt, persisted evidence
+must not imply that the unchanged original test was successfully validated.
+`test_result = unknown` remains acceptable until runtime evidence demonstrates
+that a richer terminal-state contract is needed.
+
+## Acceptance-basis evolution
+
+TestRepairEngine acceptance requirements and test oracles are intentionally
+incremental and evidence-driven rather than frozen before validation begins.
+
+The initial basis should be sufficient to test the current bounded capability,
+not an attempt to predict every future obligation. Controlled and later
+nominal/external runs may expose a material gap that deserves a new or revised
+requirement.
+
+The evolution rule is:
+
+```text
+current test basis
+-> real execution evidence
+-> preserved finding / friction / abstention
+-> requirement or oracle gap identified
+-> smallest justified basis change
+-> new coverage applied forward
+```
+
+This prevents two opposite failure modes:
+
+- pretending the first requirement list was complete when real use proves it was
+  not;
+- moving the goalposts after every failure merely to make the product easier to
+  accept.
+
+A new or revised requirement therefore needs a defensible evidence reason.
+Historical runs remain tied to the basis that existed when they were executed;
+later requirements do not silently rewrite their original verdicts.
+
+The process is deliberately lightweight and iterative. It keeps enough STLC
+structure for traceability, independent retest and honest closure without turning
+TRE validation into a permanently fixed corporate checklist.
+
 ## Anti-cheating invariants
 
 A passing test is not accepted as a valid repair if TestRepairEngine achieved it
