@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from time import perf_counter_ns
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
@@ -14,6 +15,8 @@ from test_repair_engine.candidate_finder import (
 )
 from test_repair_engine.contracts import (
     CartographerTraceability,
+    LLMEvidence,
+    LLMEvidenceOutcome,
     LocatorKind,
     ProjectReference,
     RepairAction,
@@ -21,7 +24,14 @@ from test_repair_engine.contracts import (
     RepairOutcome,
     RepairRecord,
 )
+from test_repair_engine.ollama_provider import (
+    OllamaDecisionOutcome,
+    OllamaDecisionResult,
+    OllamaProvider,
+)
 from test_repair_engine.runtime import (
+    completed_llm_evidence,
+    current_llm_configuration,
     current_llm_evidence,
     current_run_id,
     current_test_node_id,
@@ -30,6 +40,19 @@ from test_repair_engine.runtime import (
 )
 
 _MAX_TEST_ID_CANDIDATES = 50
+_NO_RESPONSE_OUTCOMES = {
+    OllamaDecisionOutcome.CALL_FAILED,
+    OllamaDecisionOutcome.TIMEOUT,
+}
+_PROVIDER_TO_EVIDENCE_OUTCOME = {
+    OllamaDecisionOutcome.CALL_FAILED: LLMEvidenceOutcome.CALL_FAILED,
+    OllamaDecisionOutcome.TIMEOUT: LLMEvidenceOutcome.TIMEOUT,
+    OllamaDecisionOutcome.INVALID_JSON: LLMEvidenceOutcome.INVALID_JSON,
+    OllamaDecisionOutcome.INVALID_SCHEMA: LLMEvidenceOutcome.INVALID_SCHEMA,
+    OllamaDecisionOutcome.ABSTAINED: LLMEvidenceOutcome.ABSTAINED,
+    OllamaDecisionOutcome.OUTSIDE_ALLOWLIST: LLMEvidenceOutcome.OUTSIDE_ALLOWLIST,
+    OllamaDecisionOutcome.VALIDATED_SELECTION: LLMEvidenceOutcome.VALIDATED_SELECTION,
+}
 
 
 def collect_test_id_candidates(
@@ -79,10 +102,12 @@ def recover_test_id_action(
     project_reference: ProjectReference | None = None,
     cartographer_traceability: CartographerTraceability | None = None,
 ) -> bool:
-    """Attempt one bounded deterministic repair and retry the failed interaction.
+    """Attempt one bounded repair and at most one retry of the failed interaction.
 
-    The callback may close over the runtime interaction value, but TestRepairEngine
-    never stores or inspects that value.
+    Deterministic selection always has precedence. Ollama is eligible only for an
+    explicitly bounded ambiguity and only when the LLM fallback is enabled. The
+    callback may close over a runtime interaction value, but TestRepairEngine
+    never sends, stores, or inspects that value.
     """
 
     if not repair_enabled():
@@ -91,11 +116,32 @@ def recover_test_id_action(
     test_node_id = current_test_node_id()
     candidates = collect_test_id_candidates(page)
     selection = select_candidate(original_test_id, action, candidates)
-    llm_evidence = current_llm_evidence(
-        eligible=selection.status is CandidateSelectionStatus.AMBIGUOUS
-    )
+    llm_eligible = selection.status is CandidateSelectionStatus.AMBIGUOUS
+    llm_evidence = current_llm_evidence(eligible=llm_eligible)
 
-    if selection.candidate is None:
+    replacement_test_id: str | None = None
+    repair_method: RepairMethod | None = None
+    selected_score = selection.score
+    reason = selection.reason
+
+    if selection.candidate is not None:
+        replacement_test_id = selection.candidate.test_id
+        repair_method = RepairMethod.HEURISTIC
+    elif llm_eligible and llm_evidence.enabled:
+        # Once the provider is called, no deterministic score may be recorded as
+        # though it described the LLM decision or a selected candidate.
+        selected_score = None
+        replacement_test_id, llm_evidence, reason = _resolve_llm_ambiguity(
+            action=action,
+            original_test_id=original_test_id,
+            shortlist=selection.shortlist,
+            page_object=page_object,
+            method_name=method_name,
+        )
+        if replacement_test_id is not None:
+            repair_method = RepairMethod.LLM
+
+    if replacement_test_id is None:
         register_repair(
             RepairRecord(
                 run_id=current_run_id(),
@@ -106,8 +152,8 @@ def recover_test_id_action(
                 locator_kind=LocatorKind.TEST_ID,
                 original_locator=original_test_id,
                 candidate_count=selection.candidate_count,
-                selected_score=selection.score,
-                reason=selection.reason,
+                selected_score=selected_score,
+                reason=reason,
                 runtime_result=RepairOutcome.FAILED,
                 llm_evidence=llm_evidence,
                 project_reference=project_reference,
@@ -116,7 +162,6 @@ def recover_test_id_action(
         )
         return False
 
-    replacement_test_id = selection.candidate.test_id
     try:
         retry(replacement_test_id)
     except PlaywrightError:
@@ -130,9 +175,9 @@ def recover_test_id_action(
                 locator_kind=LocatorKind.TEST_ID,
                 original_locator=original_test_id,
                 replacement_locator=replacement_test_id,
-                repair_method=RepairMethod.HEURISTIC,
+                repair_method=repair_method,
                 candidate_count=selection.candidate_count,
-                selected_score=selection.score,
+                selected_score=selected_score,
                 reason="Selected candidate did not recover the Playwright interaction.",
                 runtime_result=RepairOutcome.FAILED,
                 llm_evidence=llm_evidence,
@@ -152,10 +197,10 @@ def recover_test_id_action(
             locator_kind=LocatorKind.TEST_ID,
             original_locator=original_test_id,
             replacement_locator=replacement_test_id,
-            repair_method=RepairMethod.HEURISTIC,
+            repair_method=repair_method,
             candidate_count=selection.candidate_count,
-            selected_score=selection.score,
-            reason=selection.reason,
+            selected_score=selected_score,
+            reason=reason,
             runtime_result=RepairOutcome.RECOVERED,
             llm_evidence=llm_evidence,
             project_reference=project_reference,
@@ -163,3 +208,87 @@ def recover_test_id_action(
         )
     )
     return True
+
+
+def _resolve_llm_ambiguity(
+    *,
+    action: RepairAction,
+    original_test_id: str,
+    shortlist: tuple[LocatorCandidate, ...],
+    page_object: str | None,
+    method_name: str | None,
+) -> tuple[str | None, LLMEvidence, str]:
+    configuration = current_llm_configuration()
+    if not configuration.enabled or configuration.model is None:
+        raise RuntimeError("LLM ambiguity resolution requires enabled runtime configuration.")
+
+    provider = OllamaProvider(
+        model=configuration.model,
+        timeout_seconds=configuration.timeout_seconds,
+    )
+    started_ns = perf_counter_ns()
+    decision = provider.decide(
+        action=action,
+        original_test_id=original_test_id,
+        shortlist=shortlist,
+        page_object=page_object,
+        method_name=method_name,
+    )
+    latency_ms = max(0, (perf_counter_ns() - started_ns) // 1_000_000)
+
+    evidence_outcome = _PROVIDER_TO_EVIDENCE_OUTCOME[decision.outcome]
+    response_received = decision.outcome not in _NO_RESPONSE_OUTCOMES
+    replacement_test_id = _validated_execution_selection(decision, shortlist)
+
+    if (
+        decision.outcome is OllamaDecisionOutcome.VALIDATED_SELECTION
+        and replacement_test_id is None
+    ):
+        # Defense in depth: execution re-validates the exact shortlist even if a
+        # buggy provider implementation claims a validated selection.
+        evidence_outcome = LLMEvidenceOutcome.OUTSIDE_ALLOWLIST
+        response_received = True
+
+    evidence = completed_llm_evidence(
+        outcome=evidence_outcome,
+        response_received=response_received,
+        latency_ms=latency_ms,
+    )
+
+    if replacement_test_id is not None:
+        return (
+            replacement_test_id,
+            evidence,
+            "Validated Ollama shortlist selection authorized one retry.",
+        )
+
+    if decision.outcome is OllamaDecisionOutcome.ABSTAINED:
+        return None, evidence, "Ollama abstained from the bounded ambiguity."
+
+    if decision.outcome is OllamaDecisionOutcome.VALIDATED_SELECTION:
+        return (
+            None,
+            evidence,
+            "Ollama selection failed exact execution allowlist validation.",
+        )
+
+    return (
+        None,
+        evidence,
+        decision.reason or "Ollama fallback did not authorize a retry.",
+    )
+
+
+def _validated_execution_selection(
+    decision: OllamaDecisionResult,
+    shortlist: tuple[LocatorCandidate, ...],
+) -> str | None:
+    if decision.outcome is not OllamaDecisionOutcome.VALIDATED_SELECTION:
+        return None
+    if decision.selected_test_id is None:
+        return None
+
+    allowed_ids = {candidate.test_id for candidate in shortlist}
+    if decision.selected_test_id not in allowed_ids:
+        return None
+    return decision.selected_test_id

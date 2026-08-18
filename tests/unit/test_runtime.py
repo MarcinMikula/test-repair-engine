@@ -14,6 +14,7 @@ from test_repair_engine.contracts import (
 from test_repair_engine.contracts import TestOutcome as RepairTestOutcome
 from test_repair_engine.recording import load_repair_record
 from test_repair_engine.runtime import (
+    completed_llm_evidence,
     configure_runtime,
     current_llm_configuration,
     current_llm_evidence,
@@ -129,6 +130,40 @@ def test_enabled_llm_runtime_exposes_model_timeout_and_pre_call_evidence() -> No
     assert evidence.model == "qwen2.5-coder:7b"
     assert evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
     assert evidence.latency_ms is None
+
+
+def test_completed_llm_evidence_records_one_provider_attempt() -> None:
+    configure_runtime(
+        enabled=True,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+
+    evidence = completed_llm_evidence(
+        outcome=LLMEvidenceOutcome.INVALID_SCHEMA,
+        response_received=True,
+        latency_ms=7,
+    )
+
+    assert evidence.enabled is True
+    assert evidence.eligible is True
+    assert evidence.call_attempted is True
+    assert evidence.response_received is True
+    assert evidence.provider == "ollama"
+    assert evidence.model == "qwen2.5-coder:7b"
+    assert evidence.outcome is LLMEvidenceOutcome.INVALID_SCHEMA
+    assert evidence.latency_ms == 7
+
+
+def test_completed_llm_evidence_requires_enabled_llm_configuration() -> None:
+    configure_runtime(enabled=True)
+
+    with pytest.raises(RuntimeError, match="enabled runtime configuration"):
+        completed_llm_evidence(
+            outcome=LLMEvidenceOutcome.TIMEOUT,
+            response_received=False,
+            latency_ms=1,
+        )
 
 
 def test_llm_runtime_cannot_be_enabled_without_tre() -> None:

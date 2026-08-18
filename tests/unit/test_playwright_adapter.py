@@ -1,10 +1,24 @@
 """Unit tests for the Playwright adapter without starting a browser."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import Error as PlaywrightError
 
-from test_repair_engine.contracts import LLMEvidenceOutcome, RepairAction, RepairOutcome
+import test_repair_engine.playwright_adapter as adapter_module
+from test_repair_engine.contracts import (
+    LLMEvidenceOutcome,
+    RepairAction,
+    RepairMethod,
+    RepairOutcome,
+    RepairRecord,
+)
+from test_repair_engine.ollama_provider import (
+    OllamaDecisionOutcome,
+    OllamaDecisionResult,
+)
 from test_repair_engine.playwright_adapter import recover_test_id_action
 from test_repair_engine.recording import load_repair_record
 from test_repair_engine.runtime import (
@@ -77,11 +91,58 @@ class FakePage:
         return FakeLocatorCollection(self.elements)
 
 
+class StubOllamaProvider:
+    instances: list[StubOllamaProvider] = []
+    decision = OllamaDecisionResult(outcome=OllamaDecisionOutcome.ABSTAINED)
+
+    def __init__(self, *, model: str, timeout_seconds: float) -> None:
+        self.model = model
+        self.timeout_seconds = timeout_seconds
+        self.calls: list[dict[str, object]] = []
+        type(self).instances.append(self)
+
+    def decide(self, **kwargs: object) -> OllamaDecisionResult:
+        self.calls.append(kwargs)
+        return type(self).decision
+
+
 @pytest.fixture(autouse=True)
 def clean_runtime() -> None:
     reset_runtime()
     yield
     reset_runtime()
+
+
+def _ambiguity_page() -> FakePage:
+    return FakePage(
+        [
+            FakeElement(
+                test_id="catalog-search-input",
+                tag_name="input",
+                editable=True,
+            ),
+            FakeElement(
+                test_id="global-search-input",
+                tag_name="input",
+                editable=True,
+            ),
+        ]
+    )
+
+
+def _install_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    decision: OllamaDecisionResult,
+) -> None:
+    StubOllamaProvider.instances = []
+    StubOllamaProvider.decision = decision
+    monkeypatch.setattr(adapter_module, "OllamaProvider", StubOllamaProvider)
+
+
+def _finalized_record(tmp_path: Path, node_id: str) -> RepairRecord:
+    written = finalize_test(node_id)
+    assert len(written) == 1
+    return load_repair_record(written[0])
 
 
 def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: Path) -> None:
@@ -116,8 +177,7 @@ def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: P
     assert retried_with == ["catalog-search-input"]
     assert page.locator_calls == ["[data-testid]"]
 
-    written = finalize_test(node_id)
-    record = load_repair_record(written[0])
+    record = _finalized_record(tmp_path, node_id)
     assert record.schema_version == "0.2"
     assert record.runtime_result is RepairOutcome.RECOVERED
     assert record.original_locator == "search-input"
@@ -131,17 +191,23 @@ def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: P
     assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
 
 
-@pytest.mark.parametrize("llm_enabled", [False, True])
-def test_adapter_records_bounded_ambiguity_eligibility_without_calling_llm(
+def test_deterministic_winner_never_calls_llm_even_when_enabled(
     tmp_path: Path,
-    llm_enabled: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="catalog-search-input",
+        ),
+    )
     node_id = "tests/e2e/test_search.py::test_product_search"
     configure_runtime(
         enabled=True,
         output_dir=tmp_path,
-        llm_enabled=llm_enabled,
-        llm_model="qwen2.5-coder:7b" if llm_enabled else None,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
     )
     set_current_test_node(node_id)
     page = FakePage(
@@ -152,9 +218,8 @@ def test_adapter_records_bounded_ambiguity_eligibility_without_calling_llm(
                 editable=True,
             ),
             FakeElement(
-                test_id="global-search-input",
-                tag_name="input",
-                editable=True,
+                test_id="search-submit",
+                tag_name="button",
             ),
         ]
     )
@@ -167,20 +232,323 @@ def test_adapter_records_bounded_ambiguity_eligibility_without_calling_llm(
         retry=retried_with.append,
     )
 
+    assert recovered is True
+    assert retried_with == ["catalog-search-input"]
+    assert StubOllamaProvider.instances == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.repair_method is RepairMethod.HEURISTIC
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.enabled is True
+    assert record.llm_evidence.eligible is False
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+
+
+def test_ambiguity_with_llm_disabled_stays_fail_closed_without_provider_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="catalog-search-input",
+        ),
+    )
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        _ambiguity_page(),
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=retried_with.append,
+    )
+
     assert recovered is False
     assert retried_with == []
+    assert StubOllamaProvider.instances == []
 
-    written = finalize_test(node_id)
-    record = load_repair_record(written[0])
+    record = _finalized_record(tmp_path, node_id)
     assert record.runtime_result is RepairOutcome.FAILED
     assert record.replacement_locator is None
     assert record.llm_evidence is not None
-    assert record.llm_evidence.enabled is llm_enabled
+    assert record.llm_evidence.enabled is False
     assert record.llm_evidence.eligible is True
     assert record.llm_evidence.call_attempted is False
-    assert record.llm_evidence.response_received is False
     assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
-    assert record.llm_evidence.model == ("qwen2.5-coder:7b" if llm_enabled else None)
+
+
+def test_validated_llm_selection_gets_one_call_and_one_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="catalog-search-input",
+        ),
+    )
+    clock = iter([1_000_000, 6_000_000])
+    monkeypatch.setattr(adapter_module, "perf_counter_ns", clock.__next__)
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+        llm_timeout_seconds=12.5,
+    )
+    set_current_test_node(node_id)
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        _ambiguity_page(),
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=retried_with.append,
+        page_object="EcommerceSearchPage",
+        method_name="fill_by_test_id",
+    )
+
+    assert recovered is True
+    assert retried_with == ["catalog-search-input"]
+    assert len(StubOllamaProvider.instances) == 1
+    provider = StubOllamaProvider.instances[0]
+    assert provider.model == "qwen2.5-coder:7b"
+    assert provider.timeout_seconds == 12.5
+    assert len(provider.calls) == 1
+    assert provider.calls[0]["original_test_id"] == "search-input"
+    assert provider.calls[0]["page_object"] == "EcommerceSearchPage"
+    assert provider.calls[0]["method_name"] == "fill_by_test_id"
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.RECOVERED
+    assert record.repair_method is RepairMethod.LLM
+    assert record.replacement_locator == "catalog-search-input"
+    assert record.selected_score is None
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.VALIDATED_SELECTION
+    assert record.llm_evidence.call_attempted is True
+    assert record.llm_evidence.response_received is True
+    assert record.llm_evidence.latency_ms == 5
+
+
+@pytest.mark.parametrize(
+    ("provider_outcome", "evidence_outcome", "response_received"),
+    [
+        (
+            OllamaDecisionOutcome.CALL_FAILED,
+            LLMEvidenceOutcome.CALL_FAILED,
+            False,
+        ),
+        (
+            OllamaDecisionOutcome.TIMEOUT,
+            LLMEvidenceOutcome.TIMEOUT,
+            False,
+        ),
+        (
+            OllamaDecisionOutcome.INVALID_JSON,
+            LLMEvidenceOutcome.INVALID_JSON,
+            True,
+        ),
+        (
+            OllamaDecisionOutcome.INVALID_SCHEMA,
+            LLMEvidenceOutcome.INVALID_SCHEMA,
+            True,
+        ),
+        (
+            OllamaDecisionOutcome.ABSTAINED,
+            LLMEvidenceOutcome.ABSTAINED,
+            True,
+        ),
+        (
+            OllamaDecisionOutcome.OUTSIDE_ALLOWLIST,
+            LLMEvidenceOutcome.OUTSIDE_ALLOWLIST,
+            True,
+        ),
+    ],
+)
+def test_non_selection_provider_outcomes_never_retry_browser(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_outcome: OllamaDecisionOutcome,
+    evidence_outcome: LLMEvidenceOutcome,
+    response_received: bool,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=provider_outcome,
+            reason="Provider did not authorize a selection.",
+        ),
+    )
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+    set_current_test_node(node_id)
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        _ambiguity_page(),
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+    assert len(StubOllamaProvider.instances) == 1
+    assert len(StubOllamaProvider.instances[0].calls) == 1
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.replacement_locator is None
+    assert record.repair_method is None
+    assert record.selected_score is None
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.outcome is evidence_outcome
+    assert record.llm_evidence.call_attempted is True
+    assert record.llm_evidence.response_received is response_received
+
+
+def test_execution_allowlist_rejects_inconsistent_validated_provider_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="invented-search-input",
+        ),
+    )
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+    set_current_test_node(node_id)
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        _ambiguity_page(),
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.replacement_locator is None
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.OUTSIDE_ALLOWLIST
+    assert record.llm_evidence.response_received is True
+    assert "invented-search-input" not in (record.reason or "")
+
+
+def test_validated_llm_retry_failure_is_not_retried_again(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="catalog-search-input",
+        ),
+    )
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+    set_current_test_node(node_id)
+    retried_with: list[str] = []
+
+    def fail_retry(replacement_test_id: str) -> None:
+        retried_with.append(replacement_test_id)
+        raise PlaywrightError("Selected replacement still fails.")
+
+    recovered = recover_test_id_action(
+        _ambiguity_page(),
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=fail_retry,
+    )
+
+    assert recovered is False
+    assert retried_with == ["catalog-search-input"]
+    assert len(StubOllamaProvider.instances) == 1
+    assert len(StubOllamaProvider.instances[0].calls) == 1
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.repair_method is RepairMethod.LLM
+    assert record.replacement_locator == "catalog-search-input"
+    assert record.selected_score is None
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.VALIDATED_SELECTION
+
+
+def test_too_broad_ambiguity_never_calls_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_provider(
+        monkeypatch,
+        OllamaDecisionResult(
+            outcome=OllamaDecisionOutcome.VALIDATED_SELECTION,
+            selected_test_id="a-search-input",
+        ),
+    )
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id=f"{prefix}-search-input",
+                tag_name="input",
+                editable=True,
+            )
+            for prefix in ("a", "b", "c", "d")
+        ]
+    )
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=lambda replacement: None,
+    )
+
+    assert recovered is False
+    assert StubOllamaProvider.instances == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.enabled is True
+    assert record.llm_evidence.eligible is False
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
 
 
 def test_adapter_is_noop_when_runtime_repair_is_disabled() -> None:

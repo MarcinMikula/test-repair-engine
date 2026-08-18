@@ -1,8 +1,8 @@
 """Strict Ollama contract for bounded locator-ambiguity decisions.
 
-This slice deliberately has no browser execution authority. The provider may
-select only one candidate from the supplied shortlist or abstain. Runtime wiring
-and persisted LLM evidence belong to later Sprint 2 slices.
+The provider owns only one structured decision call. It has no browser execution
+authority; runtime code decides whether an exact validated shortlist selection
+may be retried.
 """
 
 from __future__ import annotations

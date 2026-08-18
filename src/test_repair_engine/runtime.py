@@ -109,11 +109,7 @@ def current_llm_configuration() -> LLMRuntimeConfiguration:
 
 
 def current_llm_evidence(*, eligible: bool) -> LLMEvidence:
-    """Build truthful pre-call evidence for one deterministic repair decision.
-
-    S2.3 records configuration and eligibility only. ``call_attempted`` remains
-    false until the provider is wired into execution in a later slice.
-    """
+    """Build truthful no-call evidence for one deterministic repair decision."""
 
     configuration = current_llm_configuration()
     if configuration.enabled:
@@ -133,6 +129,30 @@ def current_llm_evidence(*, eligible: bool) -> LLMEvidence:
         call_attempted=False,
         response_received=False,
         outcome=LLMEvidenceOutcome.NOT_CALLED,
+    )
+
+
+def completed_llm_evidence(
+    *,
+    outcome: LLMEvidenceOutcome,
+    response_received: bool,
+    latency_ms: int,
+) -> LLMEvidence:
+    """Build truthful evidence for one completed bounded provider attempt."""
+
+    configuration = current_llm_configuration()
+    if not configuration.enabled or configuration.model is None:
+        raise RuntimeError("Completed LLM evidence requires enabled runtime configuration.")
+
+    return LLMEvidence(
+        enabled=True,
+        eligible=True,
+        call_attempted=True,
+        response_received=response_received,
+        provider="ollama",
+        model=configuration.model,
+        outcome=outcome,
+        latency_ms=latency_ms,
     )
 
 
