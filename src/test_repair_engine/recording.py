@@ -10,7 +10,10 @@ from test_repair_engine.contracts import RepairRecord
 
 
 def write_repair_record(record: RepairRecord, destination: Path) -> Path:
-    """Persist one RepairRecord as UTF-8 JSON without overwriting evidence."""
+    """Persist one current-version RepairRecord as UTF-8 JSON without overwriting evidence."""
+
+    if record.schema_version != "0.2":
+        raise ValueError("write_repair_record only persists current RepairRecord schema v0.2.")
 
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -39,7 +42,7 @@ def write_repair_record(record: RepairRecord, destination: Path) -> Path:
 
 
 def load_repair_record(source: Path) -> RepairRecord:
-    """Load and validate one persisted RepairRecord."""
+    """Load and validate one persisted RepairRecord, including historical v0.1 evidence."""
 
     source = Path(source)
     return RepairRecord.model_validate_json(source.read_text(encoding="utf-8"))

@@ -19,21 +19,45 @@ from test_repair_engine.pytest_plugin import (
     pytest_unconfigure,
 )
 from test_repair_engine.recording import load_repair_record
-from test_repair_engine.runtime import current_run_id, register_repair, reset_runtime
+from test_repair_engine.runtime import (
+    current_llm_configuration,
+    current_llm_evidence,
+    current_run_id,
+    llm_fallback_enabled,
+    register_repair,
+    reset_runtime,
+)
 
 pytestmark = pytest.mark.unit
 
 
 class FakeConfig:
-    def __init__(self, *, enabled: bool, output_dir: Path) -> None:
+    def __init__(
+        self,
+        *,
+        enabled: bool,
+        output_dir: Path,
+        llm_enabled: bool = False,
+        llm_model: str | None = None,
+        llm_timeout_seconds: float = 30.0,
+    ) -> None:
         self.enabled = enabled
         self.output_dir = output_dir
+        self.llm_enabled = llm_enabled
+        self.llm_model = llm_model
+        self.llm_timeout_seconds = llm_timeout_seconds
 
     def getoption(self, name: str) -> object:
         if name == "--test-repair-engine":
             return self.enabled
         if name == "--test-repair-record-dir":
             return str(self.output_dir)
+        if name == "--test-repair-engine-llm":
+            return self.llm_enabled
+        if name == "--test-repair-engine-llm-model":
+            return self.llm_model
+        if name == "--test-repair-engine-llm-timeout":
+            return self.llm_timeout_seconds
         raise AssertionError(f"Unexpected pytest option: {name}")
 
 
@@ -56,6 +80,7 @@ def _register_recovered_record(node_id: str) -> None:
             candidate_count=1,
             selected_score=0.91,
             runtime_result=RepairOutcome.RECOVERED,
+            llm_evidence=current_llm_evidence(eligible=False),
         )
     )
 
@@ -100,3 +125,46 @@ def test_pytest_hooks_do_not_validate_repair_when_test_is_skipped(tmp_path: Path
     assert load_repair_record(records[0]).test_result is RepairTestOutcome.FAILED
 
     pytest_unconfigure(config)  # type: ignore[arg-type]
+
+
+def test_pytest_configure_exposes_explicit_llm_runtime_configuration(tmp_path: Path) -> None:
+    config = FakeConfig(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+        llm_timeout_seconds=12.5,
+    )
+
+    pytest_configure(config)  # type: ignore[arg-type]
+
+    configuration = current_llm_configuration()
+    assert llm_fallback_enabled() is True
+    assert configuration.model == "qwen2.5-coder:7b"
+    assert configuration.timeout_seconds == 12.5
+
+    pytest_unconfigure(config)  # type: ignore[arg-type]
+
+
+def test_pytest_configure_rejects_llm_without_tre(tmp_path: Path) -> None:
+    config = FakeConfig(
+        enabled=False,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model="qwen2.5-coder:7b",
+    )
+
+    with pytest.raises(pytest.UsageError, match="requires TestRepairEngine"):
+        pytest_configure(config)  # type: ignore[arg-type]
+
+
+def test_pytest_configure_rejects_enabled_llm_without_model(tmp_path: Path) -> None:
+    config = FakeConfig(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=True,
+        llm_model=None,
+    )
+
+    with pytest.raises(pytest.UsageError, match="non-blank Ollama model"):
+        pytest_configure(config)  # type: ignore[arg-type]

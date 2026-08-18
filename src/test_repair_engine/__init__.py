@@ -2,6 +2,8 @@
 
 from test_repair_engine.contracts import (
     CartographerTraceability,
+    LLMEvidence,
+    LLMEvidenceOutcome,
     LocatorKind,
     ProjectReference,
     RepairAction,
@@ -15,6 +17,8 @@ from test_repair_engine.contracts import (
 
 __all__ = [
     "CartographerTraceability",
+    "LLMEvidence",
+    "LLMEvidenceOutcome",
     "LocatorKind",
     "ProjectReference",
     "RepairAction",

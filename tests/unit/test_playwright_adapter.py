@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from test_repair_engine.contracts import RepairAction, RepairOutcome
+from test_repair_engine.contracts import LLMEvidenceOutcome, RepairAction, RepairOutcome
 from test_repair_engine.playwright_adapter import recover_test_id_action
 from test_repair_engine.recording import load_repair_record
 from test_repair_engine.runtime import (
@@ -118,11 +118,69 @@ def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: P
 
     written = finalize_test(node_id)
     record = load_repair_record(written[0])
+    assert record.schema_version == "0.2"
     assert record.runtime_result is RepairOutcome.RECOVERED
     assert record.original_locator == "search-input"
     assert record.replacement_locator == "catalog-search-input"
     assert record.page_object == "EcommerceSearchPage"
     assert record.method_name == "search_for"
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.enabled is False
+    assert record.llm_evidence.eligible is False
+    assert record.llm_evidence.call_attempted is False
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+
+
+@pytest.mark.parametrize("llm_enabled", [False, True])
+def test_adapter_records_bounded_ambiguity_eligibility_without_calling_llm(
+    tmp_path: Path,
+    llm_enabled: bool,
+) -> None:
+    node_id = "tests/e2e/test_search.py::test_product_search"
+    configure_runtime(
+        enabled=True,
+        output_dir=tmp_path,
+        llm_enabled=llm_enabled,
+        llm_model="qwen2.5-coder:7b" if llm_enabled else None,
+    )
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="catalog-search-input",
+                tag_name="input",
+                editable=True,
+            ),
+            FakeElement(
+                test_id="global-search-input",
+                tag_name="input",
+                editable=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.FILL,
+        original_test_id="search-input",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    written = finalize_test(node_id)
+    record = load_repair_record(written[0])
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.replacement_locator is None
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.enabled is llm_enabled
+    assert record.llm_evidence.eligible is True
+    assert record.llm_evidence.call_attempted is False
+    assert record.llm_evidence.response_received is False
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+    assert record.llm_evidence.model == ("qwen2.5-coder:7b" if llm_enabled else None)
 
 
 def test_adapter_is_noop_when_runtime_repair_is_disabled() -> None:

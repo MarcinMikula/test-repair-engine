@@ -7,7 +7,11 @@ from collections.abc import Callable
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 
-from test_repair_engine.candidate_finder import LocatorCandidate, select_candidate
+from test_repair_engine.candidate_finder import (
+    CandidateSelectionStatus,
+    LocatorCandidate,
+    select_candidate,
+)
 from test_repair_engine.contracts import (
     CartographerTraceability,
     LocatorKind,
@@ -18,6 +22,7 @@ from test_repair_engine.contracts import (
     RepairRecord,
 )
 from test_repair_engine.runtime import (
+    current_llm_evidence,
     current_run_id,
     current_test_node_id,
     register_repair,
@@ -86,6 +91,9 @@ def recover_test_id_action(
     test_node_id = current_test_node_id()
     candidates = collect_test_id_candidates(page)
     selection = select_candidate(original_test_id, action, candidates)
+    llm_evidence = current_llm_evidence(
+        eligible=selection.status is CandidateSelectionStatus.AMBIGUOUS
+    )
 
     if selection.candidate is None:
         register_repair(
@@ -101,6 +109,7 @@ def recover_test_id_action(
                 selected_score=selection.score,
                 reason=selection.reason,
                 runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
                 project_reference=project_reference,
                 cartographer_traceability=cartographer_traceability,
             )
@@ -126,6 +135,7 @@ def recover_test_id_action(
                 selected_score=selection.score,
                 reason="Selected candidate did not recover the Playwright interaction.",
                 runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
                 project_reference=project_reference,
                 cartographer_traceability=cartographer_traceability,
             )
@@ -147,6 +157,7 @@ def recover_test_id_action(
             selected_score=selection.score,
             reason=selection.reason,
             runtime_result=RepairOutcome.RECOVERED,
+            llm_evidence=llm_evidence,
             project_reference=project_reference,
             cartographer_traceability=cartographer_traceability,
         )

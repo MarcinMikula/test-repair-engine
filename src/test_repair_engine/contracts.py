@@ -62,6 +62,87 @@ class TestOutcome(StrEnum):
     FAILED = "failed"
 
 
+class LLMEvidenceOutcome(StrEnum):
+    """Observed result of the bounded LLM decision boundary."""
+
+    NOT_CALLED = "not_called"
+    CALL_FAILED = "call_failed"
+    TIMEOUT = "timeout"
+    INVALID_JSON = "invalid_json"
+    INVALID_SCHEMA = "invalid_schema"
+    ABSTAINED = "abstained"
+    OUTSIDE_ALLOWLIST = "outside_allowlist"
+    VALIDATED_SELECTION = "validated_selection"
+
+
+class LLMEvidence(StrictContract):
+    """Persistable facts describing whether and how the LLM boundary was used.
+
+    ``enabled`` is runtime configuration. ``eligible`` is the deterministic
+    decision that the current repair attempt qualifies for bounded LLM fallback.
+    They are intentionally independent: an eligible ambiguity can occur while
+    LLM fallback is disabled.
+    """
+
+    enabled: bool
+    eligible: bool
+    call_attempted: bool
+    response_received: bool
+    provider: Literal["ollama"] | None = None
+    model: str | None = None
+    outcome: LLMEvidenceOutcome
+    latency_ms: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def evidence_state_must_be_consistent(self) -> LLMEvidence:
+        """Reject impossible combinations of LLM runtime evidence."""
+
+        if self.enabled:
+            if self.provider != "ollama":
+                raise ValueError("Enabled LLM evidence requires provider='ollama'.")
+            if self.model is None or not self.model.strip():
+                raise ValueError("Enabled LLM evidence requires a non-blank model.")
+        elif self.provider is not None or self.model is not None:
+            raise ValueError("Disabled LLM evidence must not claim provider or model usage.")
+
+        if self.call_attempted and (not self.enabled or not self.eligible):
+            raise ValueError("An LLM call requires both enabled and eligible to be true.")
+
+        if self.response_received and not self.call_attempted:
+            raise ValueError("An LLM response cannot exist without a call attempt.")
+
+        if not self.call_attempted:
+            if self.outcome is not LLMEvidenceOutcome.NOT_CALLED:
+                raise ValueError("No-call LLM evidence requires outcome='not_called'.")
+            if self.latency_ms is not None:
+                raise ValueError("No-call LLM evidence must not contain latency_ms.")
+            return self
+
+        if self.outcome is LLMEvidenceOutcome.NOT_CALLED:
+            raise ValueError("An attempted LLM call cannot have outcome='not_called'.")
+        if self.latency_ms is None:
+            raise ValueError("An attempted LLM call requires latency_ms.")
+
+        response_outcomes = {
+            LLMEvidenceOutcome.INVALID_JSON,
+            LLMEvidenceOutcome.INVALID_SCHEMA,
+            LLMEvidenceOutcome.ABSTAINED,
+            LLMEvidenceOutcome.OUTSIDE_ALLOWLIST,
+            LLMEvidenceOutcome.VALIDATED_SELECTION,
+        }
+        no_response_outcomes = {
+            LLMEvidenceOutcome.CALL_FAILED,
+            LLMEvidenceOutcome.TIMEOUT,
+        }
+
+        if self.outcome in response_outcomes and not self.response_received:
+            raise ValueError("This LLM outcome requires response_received=true.")
+        if self.outcome in no_response_outcomes and self.response_received:
+            raise ValueError("This LLM outcome requires response_received=false.")
+
+        return self
+
+
 class ProjectReference(StrictContract):
     """Opaque TestCartographer ProjectProfile identity used for one repair.
 
@@ -138,7 +219,7 @@ class RepairRecord(StrictContract):
     original test finishes.
     """
 
-    schema_version: Literal["0.1"] = "0.1"
+    schema_version: Literal["0.1", "0.2"] = "0.2"
 
     repair_id: UUID = Field(default_factory=uuid4)
     run_id: str = Field(min_length=1)
@@ -158,9 +239,22 @@ class RepairRecord(StrictContract):
     reason: str | None = None
     runtime_result: RepairOutcome
     test_result: TestOutcome = TestOutcome.UNKNOWN
+    llm_evidence: LLMEvidence | None = None
 
     project_reference: ProjectReference | None = None
     cartographer_traceability: CartographerTraceability | None = None
+
+    @model_validator(mode="after")
+    def schema_version_must_match_llm_evidence(self) -> RepairRecord:
+        """Keep historical v0.1 records distinct from new v0.2 evidence."""
+
+        if self.schema_version == "0.1":
+            if self.llm_evidence is not None:
+                raise ValueError("RepairRecord v0.1 must not contain llm_evidence.")
+        elif self.llm_evidence is None:
+            raise ValueError("RepairRecord v0.2 requires llm_evidence.")
+
+        return self
 
     @model_validator(mode="after")
     def recovered_record_requires_validated_candidate(self) -> RepairRecord:

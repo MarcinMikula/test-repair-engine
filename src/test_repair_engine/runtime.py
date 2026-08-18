@@ -2,18 +2,35 @@
 
 from __future__ import annotations
 
+import math
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-from test_repair_engine.contracts import RepairRecord, TestOutcome
+from test_repair_engine.contracts import (
+    LLMEvidence,
+    LLMEvidenceOutcome,
+    RepairRecord,
+    TestOutcome,
+)
 from test_repair_engine.recording import write_repair_record
+
+DEFAULT_LLM_TIMEOUT_SECONDS = 30.0
 
 _CURRENT_TEST_NODE: ContextVar[str | None] = ContextVar(
     "test_repair_engine_current_test_node",
     default=None,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class LLMRuntimeConfiguration:
+    """Read-only snapshot of bounded LLM runtime configuration."""
+
+    enabled: bool
+    model: str | None
+    timeout_seconds: float
 
 
 @dataclass(slots=True)
@@ -23,6 +40,9 @@ class RuntimeState:
     enabled: bool = False
     run_id: str | None = None
     output_dir: Path = Path("repair-records")
+    llm_enabled: bool = False
+    llm_model: str | None = None
+    llm_timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS
     pending_by_test: dict[str, list[RepairRecord]] = field(default_factory=dict)
     failed_tests: set[str] = field(default_factory=set)
 
@@ -30,12 +50,31 @@ class RuntimeState:
 _STATE = RuntimeState()
 
 
-def configure_runtime(*, enabled: bool, output_dir: Path | str = "repair-records") -> None:
+def configure_runtime(
+    *,
+    enabled: bool,
+    output_dir: Path | str = "repair-records",
+    llm_enabled: bool = False,
+    llm_model: str | None = None,
+    llm_timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS,
+) -> None:
     """Reset and configure runtime state for one pytest session."""
+
+    if llm_enabled and not enabled:
+        raise ValueError("LLM fallback requires TestRepairEngine runtime recovery to be enabled.")
+    if not math.isfinite(llm_timeout_seconds) or llm_timeout_seconds <= 0:
+        raise ValueError("LLM timeout must be finite and positive.")
+
+    normalized_model = llm_model.strip() if llm_model is not None else None
+    if llm_enabled and not normalized_model:
+        raise ValueError("LLM fallback requires a non-blank Ollama model.")
 
     _STATE.enabled = enabled
     _STATE.run_id = f"run-{uuid4()}" if enabled else None
     _STATE.output_dir = Path(output_dir)
+    _STATE.llm_enabled = llm_enabled
+    _STATE.llm_model = normalized_model if llm_enabled else None
+    _STATE.llm_timeout_seconds = float(llm_timeout_seconds)
     _STATE.pending_by_test.clear()
     _STATE.failed_tests.clear()
     _CURRENT_TEST_NODE.set(None)
@@ -51,6 +90,50 @@ def repair_enabled() -> bool:
     """Return whether runtime recovery is enabled for this process."""
 
     return _STATE.enabled
+
+
+def llm_fallback_enabled() -> bool:
+    """Return whether bounded LLM fallback is explicitly enabled."""
+
+    return _STATE.enabled and _STATE.llm_enabled
+
+
+def current_llm_configuration() -> LLMRuntimeConfiguration:
+    """Return the current bounded LLM runtime configuration."""
+
+    return LLMRuntimeConfiguration(
+        enabled=llm_fallback_enabled(),
+        model=_STATE.llm_model if llm_fallback_enabled() else None,
+        timeout_seconds=_STATE.llm_timeout_seconds,
+    )
+
+
+def current_llm_evidence(*, eligible: bool) -> LLMEvidence:
+    """Build truthful pre-call evidence for one deterministic repair decision.
+
+    S2.3 records configuration and eligibility only. ``call_attempted`` remains
+    false until the provider is wired into execution in a later slice.
+    """
+
+    configuration = current_llm_configuration()
+    if configuration.enabled:
+        return LLMEvidence(
+            enabled=True,
+            eligible=eligible,
+            call_attempted=False,
+            response_received=False,
+            provider="ollama",
+            model=configuration.model,
+            outcome=LLMEvidenceOutcome.NOT_CALLED,
+        )
+
+    return LLMEvidence(
+        enabled=False,
+        eligible=eligible,
+        call_attempted=False,
+        response_received=False,
+        outcome=LLMEvidenceOutcome.NOT_CALLED,
+    )
 
 
 def current_run_id() -> str:
