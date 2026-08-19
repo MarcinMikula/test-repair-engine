@@ -13,7 +13,7 @@ The framework owns normal test execution.
 A generic mechanical interaction helper may call TestRepairEngine only after a
 repairable Playwright interaction fails.
 
-For Sprint 1 the relevant handoff is equivalent to:
+The current relevant handoff is equivalent to:
 
 ```text
 action
@@ -33,19 +33,31 @@ controlling.
 
 ## Boundary 2 — runtime recovery
 
-Sprint 1 attempts one narrow locator-drift repair.
+The current runtime still repairs one narrow `data-testid` drift interaction at
+a time, but Sprint 2 adds one bounded ambiguity escalation path.
 
 ```text
 old data-testid
 -> bounded current candidates
 -> structural action filter
 -> deterministic ranking
--> unique candidate or abstain
+
+unique candidate
 -> retry same interaction once
+
+2–3 candidate ambiguity + LLM enabled
+-> one local Ollama proposal
+-> exact deterministic validation
+-> retry same interaction once only when validated
+
+weak / too broad / invalid model result
+-> no retry
+-> original Playwright failure remains controlling
 ```
 
 A recovered interaction allows the same test invocation to continue.
-TestRepairEngine does not own business correctness.
+TestRepairEngine does not own business correctness. The LLM also does not own
+execution authority; the deterministic runtime boundary does.
 
 ## Boundary 3 — pytest outcome
 
@@ -144,6 +156,37 @@ TestCartographer
 -> durable maintenance interpretation
 ```
 
+## Supported framework acceptance
+
+Sprint 2 acceptance exercised the actual `qa-automation-framework` integration
+boundary rather than a TestRepairEngine-only harness.
+
+The same existing e-commerce checkout test and its original assertions were run
+in three configurations:
+
+```text
+TRE disabled
+-> broken search-input remains a normal Playwright failure
+
+TRE enabled, LLM disabled
+-> deterministic bounded ambiguity
+-> no model call
+-> fail closed
+
+TRE enabled, real Ollama enabled
+-> validated catalog-search-input selection
+-> one retry
+-> unchanged framework test passes
+```
+
+The authoritative S2.8 evidence run is `run-20260819T171427Z`. The acceptance
+did not modify TestRepairEngine source, framework source, the target test or its
+assertions to obtain PASS.
+
+This validates the supported integration for the current bounded capability. It
+does not transfer durable-maintenance authority from TestCartographer to
+TestRepairEngine.
+
 ## Durable maintenance
 
 ```text
@@ -157,4 +200,4 @@ qa-automation-framework
 -> receives accepted long-lived automation changes
 ```
 
-Sprint 1 does not write framework source automatically.
+TestRepairEngine does not write framework source automatically.

@@ -68,33 +68,72 @@ current DOM contains catalog-search-input
 The runtime value is used by the retry callback but is absent from persisted
 repair evidence.
 
+Sprint 2 adds a real-browser ambiguity proof with two close editable candidates:
+
+```text
+broken search-input
+-> catalog-search-input
+-> global-search-input
+```
+
+The controlled-browser validation proves three separate states:
+
+```text
+TRE disabled
+-> original locator timeout
+
+TRE enabled, LLM disabled
+-> deterministic AMBIGUOUS
+-> no provider call
+-> original failure preserved
+
+TRE enabled, bounded provider path
+-> one validated shortlist selection
+-> one real Playwright retry
+-> original test continues
+```
+
+The real local-model run is kept separate from controlled provider tests so the
+first Ollama observation can be preserved before any tuning.
+
 ### Ecosystem acceptance
 
-Repository-level E2E proof is necessary but not sufficient to close Sprint 1.
+Repository-level E2E proof is necessary but not sufficient for Sprint 2
+acceptance.
 
-The final acceptance uses the current `qa-automation-framework` e-commerce POM
-flow because the product boundary is intended to sit below concrete Page
-Objects.
+The stronger acceptance uses the current `qa-automation-framework` e-commerce POM
+flow because the product boundary sits below concrete Page Objects.
 
-The acceptance sequence is:
+S2.8 runs the same existing checkout test with the same original assertions in
+three configurations:
 
 ```text
 unchanged EcommerceSearchPage expects search-input
-controlled demo target exposes catalog-search-input
+controlled target exposes catalog-search-input
+acceptance harness adds one competing editable global-search-input
 
 TRE disabled
--> original framework test FAIL
+-> original framework test FAIL at search-input
 
-TRE enabled
--> BasePage failure hook delegates to TRE
--> same fill action recovers
+TRE enabled, LLM disabled
+-> deterministic bounded ambiguity
+-> no provider call
+-> original framework test FAIL closed
+
+TRE enabled + real Ollama
+-> one validated catalog-search-input proposal
+-> one retry
 -> original framework test continues unchanged
--> existing assertions PASS
--> RepairRecord produced
+-> all existing assertions PASS
+-> RepairRecord runtime_result = recovered
+-> RepairRecord test_result = passed
 ```
 
-The controlled target drift belongs to the acceptance setup, not a permanent
-framework product change.
+The authoritative run is `run-20260819T171427Z`.
+
+The controlled target drift and competing candidate belong to the external
+acceptance setup. The framework source, TestRepairEngine source, target test and
+its assertions remain unchanged.
 
 ## STLC alignment
 
@@ -143,6 +182,32 @@ Sprint 1 is complete only when all applicable checks pass:
 - current framework flow fails with controlled drift when TRE is disabled,
 - the same unchanged framework test passes when TRE is enabled.
 
+## Sprint 2 exit criteria
+
+Sprint 2 adds the following acceptance obligations:
+
+- bounded ambiguity is a machine-readable deterministic state,
+- only 2–3 candidate ambiguity is eligible for Ollama,
+- deterministic winners, weak candidates and too-broad ambiguity never call the
+  model,
+- at most one Ollama call occurs for one failed interaction,
+- provider timeout, transport failure, invalid JSON, invalid schema, abstention
+  and outside-allowlist selection authorize no browser retry,
+- a validated model selection is rechecked against the exact shortlist before
+  execution,
+- at most one browser retry occurs,
+- `LLMEvidence` distinguishes enabled, eligible, called, response and outcome
+  facts,
+- `selected_score` is not attributed to an LLM decision,
+- the first real-model observation is preserved before any tuning,
+- the unchanged framework test fails with TRE disabled,
+- the same unchanged framework test fails closed on deterministic ambiguity with
+  LLM disabled,
+- the same unchanged framework test passes after one validated real-Ollama
+  selection,
+- neither repository source nor the original test/assertions are changed to
+  obtain the acceptance PASS.
+
 ## CI
 
 The quality matrix runs on Python 3.11 and 3.12:
@@ -154,7 +219,9 @@ The quality matrix runs on Python 3.11 and 3.12:
 - unit tests.
 
 A separate Python 3.12 browser job installs Chromium and runs the E2E repair
-slice.
+slice. The `browser-repair` job is bounded to 30 minutes and the Chromium
+installation step to 15 minutes so a stalled package mirror cannot leave the
+validation pending for hours.
 
 ## Evidence integrity
 
@@ -176,7 +243,7 @@ TestRepairEngine still owns individual runtime repair records, while broader
 validation-run packaging and durable maintenance remain outside its runtime
 scope.
 
-## Future LLM and actionability validation rules
+## Machine-assisted and future actionability validation rules
 
 Cross-project evidence from PhoenixQA establishes a useful authority boundary for
 future TestRepairEngine slices:
@@ -197,8 +264,9 @@ remains future work and must be validated in TestRepairEngine before adoption.
 
 ### Sprint 2 machine-assisted contract rules
 
-Cross-project acceptance findings from TestCartographer add stricter rules for
-the planned bounded Ollama ambiguity fallback.
+Cross-project acceptance findings from TestCartographer established stricter
+rules for the bounded Ollama ambiguity fallback that Sprint 2 subsequently
+implemented and validated.
 
 The provider-facing contract, structured response parser, deterministic local
 validation and execution allowlist must describe the same bounded decision space.
@@ -279,6 +347,41 @@ The process is deliberately lightweight and iterative. It keeps enough STLC
 structure for traceability, independent retest and honest closure without turning
 TRE validation into a permanently fixed corporate checklist.
 
+### S2.8 acceptance-basis evolution
+
+Framework acceptance exposed two verifier assumptions that are now part of the
+test basis rather than product changes.
+
+First, `candidate_count` is the count of all ranked action-compatible candidates,
+not the length of the bounded ambiguity shortlist. Bounded LLM eligibility must
+therefore be proven from deterministic ambiguity state/evidence and the actual
+shortlist contract, not from `candidate_count == 2`.
+
+Second, pytest-playwright parameterizes the runtime node ID, for example:
+
+```text
+tests/e2e/test_ecommerce_checkout_flow.py::TestEcommerceCheckoutFlow::test_customer_can_buy_available_product[chromium]
+```
+
+Acceptance correlation must preserve the real runtime node ID while recognizing
+the intended base test identity. A verifier must not reject truthful evidence
+merely because the supported browser parameter is present.
+
+The S2.8 acceptance oracle is also now explicit:
+
+```text
+same original framework test
+same original assertions
+
+TRE OFF -> FAIL
+TRE deterministic only -> bounded ambiguity -> FAIL closed
+TRE + real Ollama -> one validated retry -> PASS
+```
+
+Correcting an evidence verifier after these assumptions were exposed does not
+rewrite the original scenario execution. The original evidence run remains
+immutable; corrected verification is appended as additional evidence.
+
 ## Anti-cheating invariants
 
 A passing test is not accepted as a valid repair if TestRepairEngine achieved it
@@ -293,10 +396,11 @@ by:
 
 ## Deferred validation
 
-Sprint 1 does not attempt to prove:
+Sprint 2 does not attempt to prove:
 
-- LLM fallback quality,
-- general selector healing,
+- general LLM robustness across diverse ambiguity shapes,
+- behavior on independently evolved dynamic frontends,
+- general selector healing beyond the current `data-testid` slice,
 - timing/actionability repair,
 - pytest-xdist/process-safe correlation,
 - enterprise application coverage,

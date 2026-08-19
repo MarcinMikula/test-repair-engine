@@ -416,7 +416,7 @@ generated the evidence needed to deserve one.
 
 **Review date:** 2026-08-19
 
-**Status:** Validated through S2.6; S2.7 correction not required
+**Status:** Validated through S2.8; S2.7 correction not required; S2.9 closure
 
 **Frozen live-validation base:** `b3aae4128f5a24db8535dc991f5575d9ba840553`
 
@@ -435,6 +435,8 @@ validated independently.
 | **S2.5 — controlled real-browser validation** | The S2.4 wiring must work against a real Chromium DOM, not only mocks, without changing product code to make the test pass. | Added one test-only E2E file using `page.set_content()` with broken `search-input` and two real editable candidates: `catalog-search-input` and `global-search-input`. Three proofs were executed: original locator really times out; deterministic-only ambiguity fails closed without a provider call; a controlled provider selects `catalog-search-input`, receives exactly one real Playwright retry, fills only the selected element and persists correct LLM evidence. Focused browser proof: 3/3 PASS; full unit: 92 PASS; full E2E: 5/5 PASS. Product changes: zero. Commit: `b3aae41` (`test: validate bounded LLM recovery in real browser`). | **PASS.** S2.4 behavior survived a real browser boundary without product rescue changes. | A sterile target is appropriate for proving mechanics, but it is not general product validity. More dynamic environments such as PhoenixQA Chaos App remain a later validation tier. |
 | **S2.6 — first real Ollama run** | Replace only the controlled provider with the real local model while keeping the same browser target, ambiguity, shortlist and oracle. Preserve the first observation before any prompt/context tuning. | Evidence-first harness ran outside the repo on clean `main` at `b3aae41`, Ollama 0.32.9, model `qwen2.5-coder:7b`, timeout 30 s. Preflight confirmed real `AMBIGUOUS` with shortlist `global-search-input` / `catalog-search-input` and froze the provider SHA256. **Authoritative first completed run:** `20260819T152020Z`. Qwen returned `VALIDATED_SELECTION` for `catalog-search-input`; one runtime retry filled `catalog-search-input="hammer"` while `global-search-input=""`; browser oracle passed; RepairRecord persisted `repair_method=llm`, `runtime_result=recovered`, `test_result=passed`, `selected_score=null`; provider latency 21091 ms. A second unchanged confirmation run at `20260819T152104Z` produced the same correct decision and oracle with 4100 ms provider latency. No repo changes were produced by either run. | **PASS on the first completed real-model run.** No prompt or context tuning was needed to obtain the expected selection. | The first live evidence does **not** justify adding a glossary, domain hints or broader context. Prompt tuning must be triggered by evidence of a specific deficiency, not by anticipation. The repeated PASS is useful stability evidence but does not replace or rewrite the authoritative first-run result. |
 | **S2.7 — evidence-driven correction if needed** | Change the smallest justified part of the contract only if S2.6 exposes a real gap. | Reviewed S2.6 first-run and confirmation evidence before changing prompt, context, heuristics or provider behavior. | **NOT REQUIRED.** S2.6 produced no correction-triggering finding. | Planned slices are conditional validation tools, not obligations to manufacture code changes. A green evidence boundary should remain unchanged until a later real failure demonstrates what is missing. |
+| **S2.8 — supported framework acceptance** | Prove the bounded LLM path through the real `qa-automation-framework` integration while preserving one existing business test and all of its original assertions. | External acceptance harness ran outside both repos against TRE `42fa4b1` and framework `4d916de`. Authoritative run: `run-20260819T171427Z`; harness SHA256 `a207e7dbcdc6b222d5caa692e458440fa38ea694c4b527029e6aeb0cc31f56f9`. The same checkout test produced: TRE OFF -> locator timeout FAIL; TRE ON / LLM OFF -> deterministic bounded ambiguity, no provider call, FAIL closed; TRE ON + real `qwen2.5-coder:7b` -> `catalog-search-input`, one validated retry, unchanged full test PASS. The deterministic record contained 23 ranked action-compatible candidates, `selected_score=0.798925`, `llm_evidence.eligible=true`, `call_attempted=false`; the LLM record persisted `repair_method=llm`, `runtime_result=recovered`, `test_result=passed`, `selected_score=null`, provider outcome `validated_selection`, latency 17280 ms. No framework or TRE source was changed to obtain PASS. | **PASS.** The supported framework boundary validated the Sprint 2 one-call/one-retry contract with the unchanged original business oracle. | `candidate_count` is not shortlist size; bounded eligibility is a separate deterministic fact. Runtime pytest node IDs may include browser parameters such as `[chromium]`, so acceptance verifiers must preserve truthful parametrized identity instead of assuming an unparameterized node ID. |
+| **S2.9 — closure and acceptance-basis evolution** | Close Sprint 2 without adding unproven product capability and update only documentation/requirements justified by execution evidence. | Reviewed S2.8 execution and corrected verifier evidence, then reviewed stale public architecture/testing/README descriptions. A separate CI finding was also closed operationally: a GitHub-hosted runner had stalled for over an hour during `playwright install --with-deps chromium`; commit `fa6cd6f` bounded `browser-repair` to 30 minutes and Chromium installation to 15 minutes without changing the Playwright strategy, and was merged to `main` as `dbd5510`. | **CLOSURE SLICE.** No product behavior change is authorized by S2.9. | Requirements evolve where evidence exposes a real obligation or verifier error. Documentation must distinguish supported bounded acceptance from broader robustness claims that remain deferred. |
 
 ### Sprint 2 conclusions
 
@@ -488,9 +490,47 @@ validated independently.
    dictionary added only to steer Qwen toward `catalog-search-input`. Such a
    change would be premature tuning after a successful first live run.
 
-9. **Sprint 2 is mechanically validated, not yet generally accepted.**
-   The next stronger boundary is the supported `qa-automation-framework`
-   integration with an unchanged original test and its original assertions.
-   Later validation should also include a less sterile, independently evolved
-   frontend such as PhoenixQA Chaos App rather than treating the controlled TRE
-   fixture as proof of general robustness.
+9. **Sprint 2 is accepted through the supported framework boundary, not proven
+   generally robust.**
+   S2.8 validated the actual `qa-automation-framework` integration with the same
+   existing checkout test and original assertions across OFF, deterministic-only
+   and real-Ollama modes. This is materially stronger than the controlled TRE
+   fixture, but it still does not prove arbitrary selector families, dynamic
+   frontends or enterprise applications.
+
+10. **Acceptance evidence fields must be interpreted by their real contract.**
+    S2.8 exposed a verifier bug that treated `candidate_count` as shortlist size.
+    The product contract actually records all ranked action-compatible candidates;
+    bounded shortlist eligibility is separate. Evidence checking must validate
+    the meaning of a field rather than infer a convenient meaning from its name.
+
+11. **Runtime test identity includes framework/plugin parametrization.**
+    pytest-playwright appended `[chromium]` to the node ID. Corrected verification
+    accepted the truthful runtime identity while preserving the intended base
+    test. This was a verifier correction, not a product repair.
+
+12. **Infrastructure stalls need bounded failure, not product redesign.**
+    A GitHub-hosted `apt`/mirror stall during Playwright dependency installation
+    did not justify removing `--with-deps` or changing browser-repair behavior.
+    The smallest evidence-driven response was to bound the job and installation
+    step with timeouts.
+
+### Requirements evolved by S2.8/S2.9
+
+The Sprint 2 acceptance basis now carries these forward-looking obligations:
+
+1. Framework acceptance for the bounded LLM slice uses the same original test and
+   original assertions across TRE OFF, deterministic-only and real-Ollama modes.
+2. A bounded ambiguity is proven by the deterministic selection state and LLM
+   eligibility/shortlist contract. `candidate_count` must not be treated as
+   shortlist length.
+3. Evidence correlation must preserve real pytest node IDs, including supported
+   parametrization such as `[chromium]`, while still matching the intended base
+   test identity.
+4. Correcting a verifier does not rewrite the historical execution. The original
+   run remains immutable and corrected verification is appended.
+5. Passing S2.8 proves the current supported framework integration only. Broader
+   robustness claims require independent future evidence.
+
+These obligations apply forward. They do not retroactively rewrite S2.5 or S2.6
+evidence collected under the earlier basis.
