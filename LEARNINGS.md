@@ -409,3 +409,88 @@ TestRepairEngine keeps a lightweight iterative validation model: enough structur
 to preserve traceability and prevent self-rescue, but no requirement to maintain
 a permanently fixed corporate-style acceptance catalogue before the product has
 generated the evidence needed to deserve one.
+
+---
+
+## Sprint 2 — bounded Ollama ambiguity fallback, slice-by-slice validation record
+
+**Review date:** 2026-08-19
+
+**Status:** Validated through S2.6; S2.7 correction not required
+
+**Frozen live-validation base:** `b3aae4128f5a24db8535dc991f5575d9ba840553`
+
+Sprint 2 tested whether a local LLM can add value only at a deterministic ambiguity
+boundary without becoming general execution authority. The work was deliberately
+split into small slices so that classification, provider contract, evidence,
+execution wiring, browser behavior and the first real model run could be
+validated independently.
+
+| Slice | What we wanted to verify | What we checked and how | Result | Learning |
+|---|---|---|---|---|
+| **S2.1 — bounded ambiguity classification** | The deterministic layer must distinguish a genuinely bounded ambiguity from no candidates, weak candidates, too-broad ambiguity and a unique deterministic winner. | Added explicit machine-readable selection statuses and a shortlist only for 2–3 close, action-compatible candidates. Unit tests exercised `NO_CANDIDATES`, `BELOW_THRESHOLD`, `AMBIGUOUS`, `AMBIGUOUS_TOO_BROAD` and `SELECTED`. Commit: `39bcfd7` (`feat: classify bounded locator ambiguity`). | **PASS.** Bounded ambiguity became an explicit state rather than an interpretation of reason text. | LLM eligibility must start from deterministic classification. A model must not be called merely because deterministic repair did not return a winner. |
+| **S2.2 — strict Ollama decision contract** | One local model call must be unable to invent execution targets or expand its own authority. | Added a fixed local Ollama endpoint, a 2–3 candidate structured shortlist, a two-shape `select` / `abstain` response schema, duplicate-key rejection, exact allowlist validation, deterministic generation settings (`temperature=0`, `seed=42`) and distinct provider outcomes for transport, timeout, JSON, schema, abstention, allowlist and validated selection. The model does not receive deterministic candidate scores. Commit: `5ef539b` (`feat: add strict bounded Ollama decision contract`). | **PASS.** The provider can propose only one supplied candidate or abstain; it has no browser authority. | Provider-facing schema and deterministic enforcement must represent the same complete contract. Structured output is not trusted until local validation succeeds. |
+| **S2.3 — auditable LLM runtime evidence** | Runtime evidence must distinguish configuration, eligibility, actual provider use and provider outcome instead of treating "LLM enabled" as "LLM used". | Added `LLMEvidence` and runtime configuration for opt-in LLM use. Evidence records `enabled`, `eligible`, `call_attempted`, `response_received`, provider, model, outcome and latency. RepairRecord schema moved to v0.2 while historical v0.1 remains readable. Unit and existing E2E regressions stayed green. Commit: `e1a21a9` (`feat: add auditable LLM runtime evidence`). | **PASS.** Evidence can state truthfully that LLM was enabled but not eligible/called, or that it was called and failed/abstained/validated. | `enabled != eligible != called != responded != validated != retry executed != test passed`. These facts must remain separate in persisted evidence. |
+| **S2.4 — ambiguity → Ollama → deterministic validation → one browser retry** | Real runtime wiring must preserve deterministic precedence, call Ollama only for eligible ambiguity, fail closed on every invalid/non-selection outcome, and authorize at most one retry after exact local revalidation. | Wired `recover_test_id_action()` to the real provider boundary. Unit tests proved: deterministic winner → zero LLM calls; LLM disabled → zero calls; too-broad ambiguity → zero calls; valid model selection → one call and one retry; transport/timeout/invalid JSON/invalid schema/abstain/outside allowlist → no browser retry; inconsistent provider selection is rejected again at execution; failed browser retry is not retried again. A review fix also removed deterministic `selected_score` from records after any actual LLM call so heuristic ranking cannot be misrepresented as the model's decision evidence. Final gates: 92 unit tests passed and 2 E2E tests passed. Commit: `0ffc029` (`feat: wire bounded Ollama ambiguity recovery`). | **PASS.** S2.4 required no broad exception loop, model self-correction loop or second retry path. | LLM decision success and browser execution success are different facts. Defense in depth belongs at the execution boundary even when the provider already validated its response. |
+| **S2.5 — controlled real-browser validation** | The S2.4 wiring must work against a real Chromium DOM, not only mocks, without changing product code to make the test pass. | Added one test-only E2E file using `page.set_content()` with broken `search-input` and two real editable candidates: `catalog-search-input` and `global-search-input`. Three proofs were executed: original locator really times out; deterministic-only ambiguity fails closed without a provider call; a controlled provider selects `catalog-search-input`, receives exactly one real Playwright retry, fills only the selected element and persists correct LLM evidence. Focused browser proof: 3/3 PASS; full unit: 92 PASS; full E2E: 5/5 PASS. Product changes: zero. Commit: `b3aae41` (`test: validate bounded LLM recovery in real browser`). | **PASS.** S2.4 behavior survived a real browser boundary without product rescue changes. | A sterile target is appropriate for proving mechanics, but it is not general product validity. More dynamic environments such as PhoenixQA Chaos App remain a later validation tier. |
+| **S2.6 — first real Ollama run** | Replace only the controlled provider with the real local model while keeping the same browser target, ambiguity, shortlist and oracle. Preserve the first observation before any prompt/context tuning. | Evidence-first harness ran outside the repo on clean `main` at `b3aae41`, Ollama 0.32.9, model `qwen2.5-coder:7b`, timeout 30 s. Preflight confirmed real `AMBIGUOUS` with shortlist `global-search-input` / `catalog-search-input` and froze the provider SHA256. **Authoritative first completed run:** `20260819T152020Z`. Qwen returned `VALIDATED_SELECTION` for `catalog-search-input`; one runtime retry filled `catalog-search-input="hammer"` while `global-search-input=""`; browser oracle passed; RepairRecord persisted `repair_method=llm`, `runtime_result=recovered`, `test_result=passed`, `selected_score=null`; provider latency 21091 ms. A second unchanged confirmation run at `20260819T152104Z` produced the same correct decision and oracle with 4100 ms provider latency. No repo changes were produced by either run. | **PASS on the first completed real-model run.** No prompt or context tuning was needed to obtain the expected selection. | The first live evidence does **not** justify adding a glossary, domain hints or broader context. Prompt tuning must be triggered by evidence of a specific deficiency, not by anticipation. The repeated PASS is useful stability evidence but does not replace or rewrite the authoritative first-run result. |
+| **S2.7 — evidence-driven correction if needed** | Change the smallest justified part of the contract only if S2.6 exposes a real gap. | Reviewed S2.6 first-run and confirmation evidence before changing prompt, context, heuristics or provider behavior. | **NOT REQUIRED.** S2.6 produced no correction-triggering finding. | Planned slices are conditional validation tools, not obligations to manufacture code changes. A green evidence boundary should remain unchanged until a later real failure demonstrates what is missing. |
+
+### Sprint 2 conclusions
+
+1. **Deterministic logic remains the authority over eligibility and execution.**
+   Ollama is not a general healer. It is invoked only after deterministic logic
+   identifies one bounded ambiguity, and its output still passes an exact local
+   allowlist before any browser side effect.
+
+2. **The fallback remains deliberately one-shot.**
+
+   ```text
+   deterministic ambiguity
+   → at most one Ollama call
+   → deterministic response validation
+   → at most one browser retry
+   → unchanged test continues
+   ```
+
+   There is no reflection loop, second model judge, self-correction conversation,
+   model fallback chain or repeated browser repair loop in Sprint 2.
+
+3. **Evidence semantics proved as important as selection mechanics.**
+   Configuration and runtime events are separate. A RepairRecord must not imply
+   model use merely because LLM mode was enabled, and a validated LLM selection
+   must not imply that the browser retry or final test succeeded.
+
+4. **Fail-closed behavior is part of the feature, not a fallback failure.**
+   Timeout, transport failure, invalid JSON, schema mismatch, abstention,
+   outside-allowlist selection and too-broad ambiguity all preserve the original
+   failure path rather than weakening the acceptance oracle.
+
+5. **A controlled browser target was the correct intermediate proof.**
+   S2.5 isolated the runtime wiring in real Chromium without introducing target
+   instability. It deliberately does not establish behavior on complex,
+   dynamic or externally controlled frontends.
+
+6. **The first real Ollama observation must remain authoritative.**
+   The first completed S2.6 run already selected the expected locator and passed
+   the browser oracle. The later repeated PASS is additional evidence, not a
+   replacement for the first run. Future tuning must not rewrite this history.
+
+7. **Prompt and context have different responsibilities.**
+   The prompt defines decision policy; bounded context supplies facts. If a
+   future run fails because the supplied facts cannot distinguish candidates,
+   the first question should be whether generic evidence such as an accessible
+   name or local scope is missing—not how to teach the prompt domain-specific
+   locator vocabulary.
+
+8. **There is currently no evidence-based reason to expand the prompt.**
+   In particular, Sprint 2 does not justify a locator glossary or explanatory
+   dictionary added only to steer Qwen toward `catalog-search-input`. Such a
+   change would be premature tuning after a successful first live run.
+
+9. **Sprint 2 is mechanically validated, not yet generally accepted.**
+   The next stronger boundary is the supported `qa-automation-framework`
+   integration with an unchanged original test and its original assertions.
+   Later validation should also include a less sterile, independently evolved
+   frontend such as PhoenixQA Chaos App rather than treating the controlled TRE
+   fixture as proof of general robustness.
