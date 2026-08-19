@@ -25,17 +25,30 @@ TestRepairEngine
         +-- collect bounded structural candidates
         +-- filter by action compatibility
         +-- rank deterministically
-        +-- abstain if weak or ambiguous
-        +-- retry one selected replacement
-                |
-                v
-        original test continues
-                |
-                v
-        original assertions execute
-                |
-                v
-        pytest finalizes RepairRecord
+        |
+        +-- unique winner --------------------+
+        |                                     |
+        +-- bounded ambiguity                  |
+        |      |                               |
+        |      +-- LLM disabled -> fail closed |
+        |      |                               |
+        |      `-- one Ollama proposal         |
+        |             -> local validation      |
+        |             -> validated selection -+
+        |
+        `-- weak / too broad -> fail closed
+                                              |
+                                              v
+                                    one browser retry
+                                              |
+                                              v
+                                    original test continues
+                                              |
+                                              v
+                                    original assertions execute
+                                              |
+                                              v
+                                    pytest finalizes RepairRecord
 ```
 
 The complete original test result remains authoritative.
@@ -132,12 +145,46 @@ Selection requires both:
 - a minimum score,
 - a minimum lead over the second candidate.
 
-The engine abstains when the evidence is too weak or ambiguous.
+The engine abstains when the evidence is too weak or the ambiguity is too broad.
+A 2–3 candidate ambiguity is a distinct machine-readable state that may become
+eligible for the optional Sprint 2 Ollama fallback.
+
+## Sprint 2 bounded Ollama boundary
+
+The local model is available only after deterministic selection returns
+`AMBIGUOUS`. `NO_CANDIDATES`, `BELOW_THRESHOLD`, `AMBIGUOUS_TOO_BROAD` and a
+deterministic `SELECTED` result do not grant model authority.
+
+The provider receives a shortlist of 2–3 action-compatible candidates without
+their deterministic scores. It may return one supplied candidate or abstain.
+
+The runtime then validates the response again against the exact shortlist before
+execution:
+
+```text
+deterministic AMBIGUOUS
+-> at most one Ollama call
+-> strict response parsing
+-> exact local allowlist validation
+-> at most one browser retry
+```
+
+Provider transport failure, timeout, invalid JSON, invalid schema, abstention or
+an outside-allowlist selection authorizes no retry.
+
+`candidate_count` in `RepairRecord` is the number of all ranked
+action-compatible candidates considered by deterministic selection. It is not
+the shortlist length. The bounded shortlist is a separate subset used only for
+eligible ambiguity.
+
+Once a real LLM call occurs, `selected_score` is not recorded as though a
+deterministic score explained the model's decision.
 
 ## Retry boundary
 
-Sprint 1 performs one retry of the failed interaction with the selected
-replacement test ID.
+The current runtime performs at most one retry of the failed interaction with an
+authorized replacement test ID, regardless of whether the replacement came from
+the deterministic layer or a validated LLM proposal.
 
 It does not:
 
@@ -193,25 +240,30 @@ TestCartographer remains responsible for deciding whether the project context is
 still compatible and whether durable maintenance requires re-observation,
 repository resnapshot, review, or a source update.
 
-## Current Sprint 1 boundary
+## Current Sprint 2 boundary
 
 Implemented in TestRepairEngine:
 
 - strict locator-repair contracts,
 - deterministic `data-testid` ranking,
 - bounded Playwright candidate collection,
+- explicit bounded-ambiguity classification,
+- optional one-call Ollama proposal only for 2–3 candidate ambiguity,
+- strict local provider-response and execution-allowlist validation,
 - one-retry recovery,
+- auditable LLM runtime evidence in RepairRecord v0.2,
 - runtime RepairRecord registration,
 - pytest final-result correlation,
-- JSON persistence,
-- unit and real-browser tests.
+- collision-safe JSON persistence,
+- unit and controlled real-browser tests,
+- unchanged `qa-automation-framework` acceptance.
 
-Still outside Sprint 1:
+Still outside the current boundary:
 
-- Ollama or other LLM fallback,
 - non-test-id locator families,
 - timing/actionability repair taxonomy,
 - source-code patching,
 - TestCartographer compatibility interpretation,
 - API/SOM repair,
-- concurrent pytest/xdist guarantees.
+- concurrent pytest/xdist guarantees,
+- general LLM robustness across independently evolved dynamic frontends.

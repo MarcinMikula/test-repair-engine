@@ -15,7 +15,8 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 1 — deterministic `data-testid` locator recovery.**
+**Sprint 2 — bounded Ollama ambiguity fallback, validated through the supported
+`qa-automation-framework` integration.**
 
 Current implementation includes:
 
@@ -26,14 +27,20 @@ Current implementation includes:
 - deterministic `data-testid` candidate ranking,
 - action compatibility checks for `fill` and `click`,
 - bounded Playwright candidate collection,
-- one retry of the selected replacement,
+- explicit deterministic states for no candidate, weak evidence, bounded
+  ambiguity, too-broad ambiguity and unique selection,
+- an opt-in local Ollama fallback only for bounded 2–3 candidate ambiguity,
+- exact local validation of the model response before execution,
+- at most one model call and at most one browser retry,
 - opt-in pytest runtime integration,
 - final pytest outcome correlation,
-- versioned `RepairRecord` JSON persistence,
-- unit tests and a real-browser repair proof,
+- versioned `RepairRecord` JSON persistence with auditable LLM evidence,
+- unit tests, controlled real-browser proofs and unchanged-framework acceptance,
 - CI quality and browser-repair jobs.
 
-No LLM is used in Sprint 1.
+The LLM is not a general healer. Deterministic logic decides whether the model is
+eligible to act and re-validates any proposed replacement before a browser side
+effect.
 
 ## Ecosystem role
 
@@ -124,15 +131,17 @@ It requires:
 - a minimum similarity score,
 - a sufficient margin over the next candidate.
 
-If the evidence is weak or ambiguous, Sprint 1 returns control to the original
-failure. Sprint 2 may ask a bounded local LLM only in such unresolved cases.
+Weak evidence and too-broad ambiguity return control to the original failure.
+Only a bounded 2–3 candidate ambiguity is eligible for the optional local Ollama
+fallback, and a model selection still requires exact deterministic allowlist
+validation before execution.
 
 ### Cheap recovery before expensive recovery
 
 ```text
 deterministic / heuristic repair
--> LLM fallback later
--> escalation when repair cannot be validated
+-> bounded Ollama fallback only for eligible ambiguity
+-> fail closed when repair cannot be validated
 ```
 
 ### Do not make the test pass by weakening it
@@ -172,6 +181,29 @@ For a `fill` action, TestRepairEngine:
 8. lets pytest finish the unchanged original test,
 9. persists `test_result=passed` or `failed` after teardown.
 
+## Sprint 2 bounded LLM slice
+
+Sprint 2 adds one narrow escalation path when deterministic ranking identifies a
+bounded ambiguity instead of a unique winner.
+
+```text
+deterministic candidate classification
+-> AMBIGUOUS with 2–3 close action-compatible candidates
+-> optional one-call Ollama proposal
+-> strict structured-response parsing
+-> exact local shortlist allowlist validation
+-> at most one retry
+-> unchanged original test continues
+```
+
+The provider receives the bounded shortlist without deterministic scores. It may
+select exactly one supplied candidate or abstain. Transport failure, timeout,
+invalid JSON, schema mismatch, explicit abstention, outside-allowlist selection,
+too-broad ambiguity and failed browser retry all fail closed.
+
+Sprint 2 does not add reflection, a second judge, self-correction chat, a model
+fallback chain or repeated repair attempts.
+
 ## pytest activation
 
 Installing the package registers a lightweight pytest plugin.
@@ -200,7 +232,7 @@ When the flag is absent, TestRepairEngine does not attempt runtime repair.
 
 ## Repair evidence
 
-A Sprint 1 `RepairRecord` can contain:
+A current `RepairRecord` (schema v0.2) can contain:
 
 - run ID,
 - pytest node ID,
@@ -208,12 +240,18 @@ A Sprint 1 `RepairRecord` can contain:
 - locator kind,
 - original test ID,
 - replacement test ID when selected,
-- heuristic repair method,
-- bounded candidate count,
-- selected deterministic score,
+- heuristic or LLM repair method,
+- ranked action-compatible candidate count,
+- selected deterministic score when the decision remained deterministic,
 - runtime outcome,
 - final pytest outcome,
+- LLM evidence separating enabled, eligible, called, responded and provider
+  outcome states,
 - optional TestCartographer traceability.
+
+`candidate_count` is the number of ranked action-compatible candidates. It is not
+the size of the bounded LLM shortlist. The shortlist remains independently
+limited to 2–3 candidates.
 
 Runtime interaction values are deliberately absent.
 
@@ -264,22 +302,38 @@ python -m pytest -m unit -v
 python -m pytest -m e2e -v
 ```
 
-## Sprint 1 acceptance
+## Sprint 2 acceptance
 
-Repository-level implementation acceptance requires:
+Sprint 2 was accepted against the unchanged
+`qa-automation-framework` e-commerce checkout test and its original assertions.
+
+The accepted S2.8 sequence was:
 
 ```text
-unit suite                         PASS
-real-browser baseline drift       reproduced
-real-browser deterministic repair PASS
-RepairRecord runtime_result       recovered
-RepairRecord test_result          passed
+same original framework test
+same original assertions
+
+TRE OFF
+-> FAIL at broken search-input
+
+TRE ON, deterministic only
+-> bounded ambiguity
+-> no LLM call
+-> FAIL closed
+
+TRE ON + real Ollama
+-> validated catalog-search-input selection
+-> one retry
+-> unchanged full framework test PASS
 ```
 
-The final Sprint 1 ecosystem gate additionally uses the unchanged
-`qa-automation-framework` e-commerce test with a controlled search-input drift.
-The framework integration is kept separate so the engine can be validated before
-another repository is changed.
+The authoritative framework-acceptance evidence run is
+`run-20260819T171427Z`. No TestRepairEngine or framework product source was
+changed to obtain the PASS.
+
+This validates the supported framework integration for the bounded Sprint 2
+slice. It does not establish general robustness across arbitrary locator
+families, dynamic frontends or enterprise applications.
 
 ## Roadmap
 
@@ -287,14 +341,23 @@ another repository is changed.
 
 Executable project skeleton and ecosystem contracts.
 
-### Sprint 1 — current
+### Sprint 1 — complete
 
 Deterministic `data-testid` locator recovery and unchanged-test validation.
 
-### Sprint 2
+### Sprint 2 — complete
 
-Add Ollama only when deterministic selection cannot resolve an otherwise
-repairable locator failure safely.
+Bounded local Ollama fallback for deterministic 2–3 candidate ambiguity,
+auditable LLM evidence, one-shot runtime execution and unchanged-framework
+acceptance.
+
+### Later validation directions
+
+- independently evolved/dynamic frontend validation,
+- broader locator families only when evidence justifies them,
+- timing/actionability recovery only with observed runtime evidence,
+- pytest-xdist/process-safe correlation,
+- durable maintenance remaining outside TestRepairEngine runtime ownership.
 
 ## License
 
