@@ -311,6 +311,80 @@ must not imply that the unchanged original test was successfully validated.
 `test_result = unknown` remains acceptable until runtime evidence demonstrates
 that a richer terminal-state contract is needed.
 
+## Recovery escalation policy
+
+TestRepairEngine is an engineering recovery component, not an LLM research
+project. Validation must therefore prefer the least powerful mechanism that can
+recover the failed interaction safely and preserve the original test oracle.
+
+The default escalation order for future capabilities is:
+
+```text
+native Playwright / framework behavior
+-> deterministic / heuristic TestRepairEngine recovery
+-> bounded local LLM assistance
+-> when local automation is insufficient:
+   -> remote / online LLM when stronger machine reasoning is justified
+   OR
+   -> human review when domain, risk or evidence requires human authority
+```
+
+This policy does not mean that every runtime failure traverses every tier.
+Escalation stops as soon as a lower tier has sufficient evidence.
+
+In particular:
+
+- if Playwright or the framework already handles a condition reliably, TRE must
+  not add LLM-assisted recovery merely to demonstrate AI usage;
+- if deterministic evidence selects a safe repair, the model must not be called
+  only for confirmation;
+- local LLM assistance is preferred before remote LLM use;
+- failure of the local model should first trigger review of classification,
+  collected evidence, logs, bounded context and task formulation;
+- a larger/remote model is justified only when the evidence is already adequate,
+  the local model remains materially insufficient, and the additional
+  cost/data-transfer boundary is acceptable;
+- human review is the terminal boundary when automated evidence cannot justify a
+  safe action or when business/domain interpretation is required.
+
+Remote LLM and human-review tiers are strategy boundaries, not claims that the
+current Sprint 2 runtime already implements them.
+
+## Validation maturity
+
+A healing capability is not considered broadly validated because one controlled
+case passes. Each healing type should be exercised progressively against
+difficulty levels that correspond to realistic application behavior.
+
+The reusable maturity path is:
+
+```text
+controlled case
+-> realistic ambiguity / dynamics
+-> independently evolved target
+-> unchanged business-flow oracle
+```
+
+The levels mean:
+
+- **controlled case** — isolate the mechanism and prove fail-before / recover-after
+  behavior in a bounded environment;
+- **realistic ambiguity / dynamics** — introduce competing candidates, DOM
+  mutation, timing or other behavior that can occur in real applications without
+  manufacturing arbitrary complexity;
+- **independently evolved target** — validate against a frontend whose structure
+  was not designed specifically to make TRE pass;
+- **unchanged business-flow oracle** — prove recovery through the supported
+  framework path while the original test steps and assertions remain unchanged.
+
+Not every healing capability must cross every maturity level in one sprint.
+Documentation and product claims must state the strongest level actually
+validated and keep broader levels explicitly unproven.
+
+This maturity model applies across selector, visibility, timing/actionability and
+future healing families. It is intended to improve engineering confidence, not to
+turn TestRepairEngine into a benchmark of model intelligence.
+
 ## Acceptance-basis evolution
 
 TestRepairEngine acceptance requirements and test oracles are intentionally

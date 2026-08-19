@@ -534,3 +534,115 @@ The Sprint 2 acceptance basis now carries these forward-looking obligations:
 
 These obligations apply forward. They do not retroactively rewrite S2.5 or S2.6
 evidence collected under the earlier basis.
+
+---
+
+## Sprint 3 planning lesson — optimize for engineering effectiveness, not LLM usage
+
+**Planning date:** 2026-08-19
+
+**Status:** Established for Sprint 3+
+
+### Problem
+
+After Sprint 2 proved that a bounded local LLM can resolve one real locator
+ambiguity, the next risk is architectural rather than model-specific:
+TestRepairEngine could drift into treating LLM usage itself as the objective.
+
+That would turn an engineering recovery component into a model-comparison or
+research project. It would also add latency, cost, data exposure and new failure
+modes to cases that Playwright or deterministic logic can already solve safely.
+
+The product objective is narrower:
+
+> Restore the failed technical interaction with the least powerful mechanism
+> that has sufficient evidence to do so safely, then let the unchanged original
+> test remain the oracle.
+
+### Decision — escalation must be earned
+
+Future recovery design and validation follow this order:
+
+```text
+native Playwright / framework behavior
+-> deterministic / heuristic TestRepairEngine recovery
+-> bounded local LLM assistance
+-> when local automation is insufficient:
+   -> remote / online LLM when stronger machine reasoning is justified
+   OR
+   -> human review when domain, risk or evidence requires human authority
+```
+
+This is a preference order, not a requirement to execute every stage for every
+failure.
+
+If normal Playwright or framework behavior already handles the condition
+reliably, TestRepairEngine should not add a repair layer merely to demonstrate
+healing. If deterministic evidence is sufficient, an LLM should not be called
+for reassurance.
+
+Each more expensive or more powerful stage must be justified by evidence that
+the preceding stage is insufficient for that class and difficulty of problem.
+
+### Local LLM before remote LLM
+
+The local model remains the preferred machine-assisted reasoning boundary.
+
+A local model should not be expected to reconstruct an application from a vague
+"fix this test" request. TestRepairEngine should first do the engineering work of
+making the problem diagnosable:
+
+- classify the failed interaction,
+- collect bounded evidence relevant to that failure,
+- provide useful structural/runtime facts and failure logs,
+- remove irrelevant or sensitive payload,
+- define the allowed decision space,
+- explain the requested decision precisely,
+- validate the result deterministically before execution.
+
+If the local model fails, the first question is therefore not "which larger
+model should replace it?" but "what evidence or problem formulation was missing?"
+
+A remote/online LLM becomes a justified escalation only when the bounded evidence
+and task formulation are already good, the local model still fails repeatedly on
+a materially useful case, and the additional cost/data-transfer boundary is
+acceptable.
+
+Human review remains the final authority when evidence is contradictory,
+business/domain interpretation is required, the action is too risky for automatic
+execution, or no automated tier can justify a safe decision.
+
+### Validation maturity follows realistic difficulty
+
+Every supported healing capability should eventually be tested across increasing
+levels of application difficulty rather than receiving one synthetic PASS and
+being called complete.
+
+The reusable maturity path is:
+
+```text
+controlled case
+-> realistic ambiguity / dynamics
+-> independently evolved target
+-> unchanged business-flow oracle
+```
+
+Difficulty should represent real application problems, not artificial complexity
+added only to make an LLM struggle.
+
+Different failure/healing types may reach different maturity levels at different
+times. A capability claim must therefore be limited to the strongest level that
+has actually been validated.
+
+### Consequence for Sprint 3
+
+Sprint 3 should increase the quality of evidence before increasing the breadth of
+healing functionality.
+
+The first target is to take the already implemented Sprint 2 locator-recovery
+capability into a harder, independently evolved or dynamic frontend and observe
+which layer of the escalation policy is actually needed.
+
+This planning decision does not authorize a new healing type, remote LLM
+integration or automatic human-escalation workflow. Those require their own
+evidence-driven slices.
