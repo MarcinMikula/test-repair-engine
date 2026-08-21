@@ -75,14 +75,24 @@ def collect_test_id_candidates(
 
             tag_name = element.evaluate("element => element.tagName.toLowerCase()")
             role = element.get_attribute("role")
+            visible = element.is_visible()
+            enabled = element.is_enabled()
+            try:
+                editable = element.is_editable()
+            except PlaywrightError:
+                # Playwright may reject editability probes for element types where
+                # editability is not applicable, such as ordinary buttons. Keep the
+                # otherwise valid candidate and represent it as non-editable.
+                editable = False
+
             candidates.append(
                 LocatorCandidate(
                     test_id=test_id,
                     tag_name=str(tag_name),
                     role=role,
-                    visible=element.is_visible(),
-                    enabled=element.is_enabled(),
-                    editable=element.is_editable(),
+                    visible=visible,
+                    enabled=enabled,
+                    editable=editable,
                 )
             )
         except PlaywrightError:

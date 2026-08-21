@@ -41,6 +41,7 @@ class FakeElement:
         visible: bool = True,
         enabled: bool = True,
         editable: bool = False,
+        editable_error: bool = False,
     ) -> None:
         self.test_id = test_id
         self.tag_name = tag_name
@@ -48,6 +49,7 @@ class FakeElement:
         self.visible = visible
         self.enabled = enabled
         self.editable = editable
+        self.editable_error = editable_error
 
     def get_attribute(self, name: str) -> str | None:
         if name == "data-testid":
@@ -67,6 +69,8 @@ class FakeElement:
         return self.enabled
 
     def is_editable(self) -> bool:
+        if self.editable_error:
+            raise PlaywrightError("Element type does not support editability.")
         return self.editable
 
 
@@ -184,6 +188,58 @@ def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: P
     assert record.replacement_locator == "catalog-search-input"
     assert record.page_object == "EcommerceSearchPage"
     assert record.method_name == "search_for"
+    assert record.llm_evidence is not None
+    assert record.llm_evidence.enabled is False
+    assert record.llm_evidence.eligible is False
+    assert record.llm_evidence.call_attempted is False
+    assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+
+
+def test_adapter_keeps_click_candidate_when_editability_probe_is_not_applicable(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_login"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="btn-login-a1b2",
+                tag_name="button",
+                editable_error=True,
+            ),
+            FakeElement(
+                test_id="btn-add-item-c3d4",
+                tag_name="button",
+                editable_error=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    candidates = adapter_module.collect_test_id_candidates(page)
+
+    assert [(candidate.test_id, candidate.editable) for candidate in candidates] == [
+        ("btn-login-a1b2", False),
+        ("btn-add-item-c3d4", False),
+    ]
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.CLICK,
+        original_test_id="btn-login",
+        retry=retried_with.append,
+    )
+
+    assert recovered is True
+    assert retried_with == ["btn-login-a1b2"]
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.RECOVERED
+    assert record.repair_method is RepairMethod.HEURISTIC
+    assert record.replacement_locator == "btn-login-a1b2"
+    assert record.selected_score is not None
+    assert record.selected_score >= 0.60
     assert record.llm_evidence is not None
     assert record.llm_evidence.enabled is False
     assert record.llm_evidence.eligible is False
