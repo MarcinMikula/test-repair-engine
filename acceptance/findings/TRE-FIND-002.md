@@ -1,8 +1,8 @@
-﻿# TRE-FIND-002 — custom Playwright test-id attribute is invisible to candidate collection
+# TRE-FIND-002 — custom Playwright test-id attribute is invisible to candidate collection
 
 ## Status
 
-**OPEN — external evidence-qualified capability gap; product correction not yet implemented.**
+**CLOSED — corrected and independently validated against the qualified live Toolshop drift.**
 
 ## Discovery context
 
@@ -196,4 +196,85 @@ Required proof:
 
 ## Closure
 
-Pending.
+**CLOSED.**
+
+Correction commit:
+
+~~~text
+6e6a3f6b383da7f1f6261fc423eeff630395bda8
+feat: support custom Playwright test-id attribute
+~~~
+
+Authoritative pre-fix qualification:
+
+~~~text
+run-20260822T162252Z
+~~~
+
+Authoritative live post-fix acceptance:
+
+~~~text
+run-20260822T171815Z
+~~~
+
+The post-fix run re-exercised the real Toolshop payment interaction without
+modifying the target application.
+
+Observed historical contract:
+
+~~~text
+Toolshop v4
+
+account-name    -> present
+account-number  -> present
+original fills  -> PASS
+~~~
+
+Observed current drift:
+
+~~~text
+Toolshop v5
+
+account-name    -> absent
+account_name    -> present
+
+account-number  -> absent
+account_number  -> present
+~~~
+
+Both old v5 locators naturally timed out before recovery.
+
+The corrected production collector then inspected the explicitly configured
+Playwright `data-test` attribute and saw both replacement candidates.
+
+Production deterministic recovery produced:
+
+~~~text
+account-name
+-> account_name
+-> heuristic
+-> score 0.975
+-> runtime_result recovered
+-> test_result passed
+
+account-number
+-> account_number
+-> heuristic
+-> score 0.978571
+-> runtime_result recovered
+-> test_result passed
+~~~
+
+Exactly two RepairRecords were produced. LLM fallback remained disabled and
+no model call occurred.
+
+The final interaction oracle confirmed the expected values in both recovered
+fields. The acceptance stopped before order submission.
+
+This closes the evidence-qualified capability gap.
+
+The resulting claim remains bounded: the logical Playwright `TEST_ID` recovery
+path now supports an explicitly supplied physical test-id attribute while
+preserving `data-testid` as the default. This does not establish support for
+arbitrary locator families, generic DOM healing, timing healing or unrestricted
+selector inference.

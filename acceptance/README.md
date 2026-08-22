@@ -29,7 +29,7 @@ their closure state across independent runtime validation.
 | Finding | Status | Pre-fix evidence | Post-fix evidence | Summary |
 |---|---|---|---|---|
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
-| [`TRE-FIND-002`](findings/TRE-FIND-002.md) | OPEN | `run-20260822T162252Z` | pending | Real Toolshop v4→v5 `data-test` evolution is deterministically rankable, but the current collector assumes the physical `data-testid` attribute and therefore sees zero candidates when Playwright uses a custom test-id attribute. |
+| [`TRE-FIND-002`](findings/TRE-FIND-002.md) | CLOSED | `run-20260822T162252Z` | `run-20260822T171815Z` | Real Toolshop v4-to-v5 `data-test` drift exposed the physical test-id attribute collection gap; the correction was validated live with two deterministic recoveries, valid RepairRecords and zero LLM calls. |
 
 ## Current Sprint 3 validation chain
 
