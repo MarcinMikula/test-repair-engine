@@ -646,3 +646,165 @@ which layer of the escalation policy is actually needed.
 This planning decision does not authorize a new healing type, remote LLM
 integration or automatic human-escalation workflow. Those require their own
 evidence-driven slices.
+
+---
+
+## Sprint 3 — independent dynamic validation of existing locator recovery
+
+**Review date:** 2026-08-22
+
+**Status:** Closed — current `data-testid` locator recovery validated through the
+frozen PhoenixQA LOW, MEDIUM and HIGH configurations; natural LLM escalation was
+not required.
+
+### Goal and frozen boundary
+
+Sprint 3 did not start by adding another healing type. It took the existing
+Sprint 2 locator-recovery capability into an independently evolved dynamic
+frontend and asked which recovery tier was actually needed as difficulty
+increased.
+
+The target was the frozen PhoenixQA Chaos App at:
+
+```text
+6e28811e37d9498a4d06237e1b26bf06b6159552
+```
+
+PhoenixQA's own healer remained disabled. Large runtime evidence stayed outside
+the repository under `TestRepairEngine-local-artifacts`.
+
+The validation intentionally preserved:
+
+- the original broken `data-testid` locators,
+- deterministic scoring and ambiguity thresholds,
+- the one-retry contract,
+- LLM eligibility rules,
+- the target implementation,
+- the business outcomes used as final oracles.
+
+Product changes were allowed only after a failure had first been preserved as
+evidence and classified.
+
+### Validation chain
+
+| Slice | Evidence | Result | What it established |
+|---|---|---|---|
+| **S3.1 — stable target preflight** | `run-20260820T163217Z` | **PASS** | The frozen target and login business flow work with stable selectors before recovery is introduced. TRE was not imported and the PhoenixQA healer was not used. |
+| **S3.2-A — LOW / TRE OFF** | `run-20260820T165244Z` | **PASS** | Official LOW selector rotation broke the original `username`, `password` and `btn-login` test IDs before repair. |
+| **S3.2-B — LOW / TRE ON / LLM OFF, pre-fix** | `run-20260820T165756Z` | **FAIL** | Username and password recovered, but the real Playwright collector dropped the rotated login button after an editability metadata probe error. The failure became `TRE-FIND-001` / Issue #5. |
+| **TRE-FIND-001 correction** | correction commit `5c8f50048f06bd2612ec89280cbad0847d5d5bda` | **FIXED** | A failed non-essential `is_editable()` probe now degrades to `editable=False` instead of discarding an otherwise valid click candidate. Scoring, thresholds, ambiguity policy and LLM policy were unchanged. |
+| **S3.2-B — LOW post-fix** | `run-20260822T064419Z` | **PASS** | All three original locators failed naturally first and then recovered heuristically. The unchanged `Welcome, admin.` oracle passed with zero LLM calls. |
+| **S3.3-A — MEDIUM / TRE OFF** | `run-20260822T073152Z` | **PASS** | Official MEDIUM activated `selector_rotation + dom_mutation`; the original login locators still failed before repair. |
+| **S3.3-B — MEDIUM / TRE ON / LLM OFF** | authoritative `run-20260822T100403Z` | **PASS** | All three login locators recovered heuristically in the presence of MEDIUM DOM mutation and the business oracle passed with zero LLM calls. |
+| **S3.4-A — HIGH / TRE OFF + timing proof** | `run-20260822T105112Z` | **PASS** | Official HIGH activated `selector_rotation + dom_mutation + async_delay`. `AddItemForm` showed a real hidden/absent confirmation phase followed by native visibility after about 972 ms, while the original locators remained broken. |
+| **S3.4-B — HIGH / TRE ON / LLM OFF** | `run-20260822T125113Z` | **PASS** | Five broken locator interactions recovered heuristically. Login and Add Item business outcomes passed. The real async delay was handled by native Playwright waiting (about 1886 ms), not by TRE timing healing. LLM calls remained zero. |
+| **S3.5 — natural LLM escalation** | LOW/MEDIUM/HIGH evidence | **NOT REQUIRED / NOT EARNED** | No tested interaction reached the bounded `AMBIGUOUS` state. Calling Ollama only to demonstrate model usage would have violated the escalation policy. |
+| **S3.6 — additional correction after higher-level validation** | MEDIUM/HIGH evidence | **NOT REQUIRED** | After the LOW collector defect was corrected, MEDIUM and HIGH exposed no additional product defect requiring remediation. |
+
+The earlier MEDIUM run `run-20260822T080523Z` is retained as useful behavioral
+PASS evidence but is not the authoritative acceptance record because its
+external helper carried stale S3.2/LOW provenance in the probe filename and
+RepairRecord node ID. The corrected unchanged rerun
+`run-20260822T100403Z` is authoritative for S3.3-B.
+
+### Lessons that survive Sprint 3
+
+1. **Failure is a first-class validation result.**
+   The pre-fix LOW failure was not a bad outcome to hide. It exposed a real
+   collector defect, established its boundary and justified the smallest product
+   correction. The later PASS does not replace that failure; the two runs form
+   one evidence chain.
+
+   > Do not optimize validation for green results. Optimize it for discovering
+   > the true boundary of each recovery tier.
+
+2. **Escalation must be earned by the failure state.**
+   LOW, MEDIUM and HIGH were all solved by deterministic locator recovery after
+   the LOW collector correction. No bounded ambiguity occurred, so no LLM call
+   was justified. Zero LLM calls is therefore a positive engineering result, not
+   missing functionality.
+
+3. **Native framework behavior keeps first authority.**
+   HIGH exercised a real 300–2000 ms PhoenixQA asynchronous delay on
+   `AddItemForm`. Playwright's native wait handled it inside the 3 s observation
+   window. TRE did not manufacture a short timeout or add timing healing merely
+   to claim another repaired failure type.
+
+4. **A clean Git repository does not by itself freeze runtime behavior.**
+   Early Sprint 3 work showed that an ignored local PhoenixQA `.env` could change
+   the Chaos App runtime while the repository SHA and worktree still looked
+   correct. Authoritative runs therefore used `git archive` snapshots of the
+   exact frozen PhoenixQA commit and excluded the ignored local `.env`.
+
+   ```text
+   source revision frozen
+   !=
+   runtime configuration frozen
+   ```
+
+5. **Test doubles must model relevant integration failure semantics.**
+   The unit-test `FakeElement` returned a boolean from `is_editable()`, while the
+   real Playwright boundary could raise `PlaywrightError` for an otherwise useful
+   click candidate. Independent browser validation exposed a defect that happy
+   path mocks could not reveal.
+
+6. **Failure of optional metadata should degrade that metadata, not destroy
+   stronger evidence.**
+   For a click target, inability to establish editability is not enough reason to
+   discard a visible, enabled, click-compatible button. `TRE-FIND-001` established
+   the reusable collector rule:
+
+   ```text
+   optional metadata probe fails
+   -> mark that metadata unavailable / conservative
+   -> preserve otherwise valid candidate evidence
+   ```
+
+7. **Configured or declared mechanisms are weaker evidence than exercised
+   behavior.**
+   Merely running PhoenixQA with `HIGH` would not have proven timing noise on the
+   login flow because `async_delay` is exercised by `AddItemForm`, not by
+   `LoginForm`. S3.4 therefore added a real Add Item path and observed the delayed
+   confirmation instead of treating the status panel as sufficient proof.
+
+8. **Behavioral PASS and authoritative evidence are different facts.**
+   The first MEDIUM recovery run behaved correctly but carried stale harness
+   provenance. It remained useful diagnostic evidence, while a clean rerun with
+   truthful S3.3 identity became the authoritative record. Evidence identity is
+   part of acceptance quality.
+
+9. **Capability claims must describe what TRE actually repaired.**
+   MEDIUM and HIGH do not prove generic DOM-mutation healing or timing healing.
+   They prove that the current `data-testid` locator-recovery capability remained
+   effective while the tested flows ran in the presence of those target dynamics,
+   and that native Playwright waiting was sufficient for the observed async delay.
+
+10. **Independent dynamic validation is materially stronger than a controlled
+    fixture, but it is still bounded evidence.**
+    Sprint 3 moved current `data-testid` recovery from a controlled/framework
+    proof into the frozen independently evolved PhoenixQA target across three
+    difficulty levels. It still does not establish arbitrary locator families,
+    arbitrary DOM rewrites, actionability recovery or enterprise-wide robustness.
+
+### Sprint 3 conclusion
+
+The current validated escalation outcome is:
+
+```text
+LOW
+-> deterministic locator recovery sufficient after one real collector defect was fixed
+-> LLM 0
+
+MEDIUM
+-> deterministic locator recovery sufficient in the presence of DOM mutation
+-> LLM 0
+
+HIGH
+-> deterministic locator recovery sufficient for five broken locators
+-> native Playwright waiting sufficient for the exercised async delay
+-> LLM 0
+```
+
+Sprint 3 therefore strengthens the evidence for the existing narrow capability
+without expanding product authority. Future healing breadth should still be
+triggered by a real failure that the current lower tiers cannot solve safely.
