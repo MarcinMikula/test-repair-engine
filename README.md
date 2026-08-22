@@ -15,13 +15,14 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 3 — independent dynamic validation complete for the current
-`data-testid` locator-recovery capability.**
+**Sprint 4.2 - external historical test-id drift validated against Toolshop.**
 
-The existing recovery path has now been exercised against the frozen PhoenixQA
-Chaos App across official LOW, MEDIUM and HIGH configurations. Sprint 3 found one
-real Playwright candidate-collection defect at LOW, preserved and corrected it,
-then validated MEDIUM and HIGH without additional product tuning or LLM calls.
+The logical Playwright `TEST_ID` recovery path now preserves `data-testid` as
+the default physical attribute while allowing callers to explicitly supply the
+custom test-id attribute configured in Playwright. The capability was qualified
+and then independently validated against real Toolshop v4-to-v5
+`account-name`/`account-number` drift, with deterministic recovery and zero LLM
+calls.
 
 Current implementation includes:
 
@@ -29,7 +30,8 @@ Current implementation includes:
 - strict repair contracts,
 - exact opaque ProjectProfile identity compatible with the current
   TestCartographer naming boundary,
-- deterministic `data-testid` candidate ranking,
+- deterministic logical `TEST_ID` candidate ranking with `data-testid` as the
+  default and explicit custom Playwright test-id attribute support,
 - action compatibility checks for `fill` and `click`,
 - bounded Playwright candidate collection,
 - explicit deterministic states for no candidate, weak evidence, bounded
@@ -424,6 +426,21 @@ Independent dynamic validation of the existing `data-testid` recovery capability
 against frozen PhoenixQA LOW/MEDIUM/HIGH. One real collector defect was found at
 LOW, preserved, corrected and retested. MEDIUM and HIGH required no LLM
 escalation; HIGH timing noise was handled by native Playwright waiting.
+
+### Sprint 4.1 / 4.2 - complete
+
+External Toolshop qualification confirmed real historical
+`account-name` -> `account_name` and `account-number` -> `account_number`
+test-id drift while Playwright used the physical `data-test` attribute.
+
+The resulting capability gap was preserved as the acceptance finding
+`TRE-FIND-002`, corrected by making the physical Playwright test-id attribute
+explicit at the adapter boundary, and validated in a separate live post-fix
+run. Both repairs remained deterministic and required zero LLM calls.
+
+The bounded claim is support for logical `TEST_ID` recovery with an explicitly
+supplied physical test-id attribute. It is not a claim of arbitrary selector
+family recovery.
 
 ### Later validation directions
 

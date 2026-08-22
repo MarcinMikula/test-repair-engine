@@ -29,6 +29,7 @@ their closure state across independent runtime validation.
 | Finding | Status | Pre-fix evidence | Post-fix evidence | Summary |
 |---|---|---|---|---|
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
+| [`TRE-FIND-002`](findings/TRE-FIND-002.md) | CLOSED | `run-20260822T162252Z` | `run-20260822T171815Z` | Real Toolshop v4-to-v5 `data-test` drift exposed the physical test-id attribute collection gap; the correction was validated live with two deterministic recoveries, valid RepairRecords and zero LLM calls. |
 
 ## Current Sprint 3 validation chain
 
@@ -51,7 +52,7 @@ S3.2-A LOW / TRE OFF
 -> selector rotation proved
 -> original locators fail before repair
 
-S3.2-B LOW / TRE ON / LLM OFF — pre-fix
+S3.2-B LOW / TRE ON / LLM OFF â€” pre-fix
 -> FAIL: run-20260820T165756Z
 -> username recovered heuristically
 -> password recovered heuristically
@@ -64,7 +65,7 @@ TRE-FIND-001 remediation
 -> corrected main: 5e4ae946cf9cad197aace1d223c2383c5a085601
 -> scoring / thresholds / ambiguity / LLM policy unchanged
 
-S3.2-B LOW / TRE ON / LLM OFF — post-fix
+S3.2-B LOW / TRE ON / LLM OFF â€” post-fix
 -> PASS: run-20260822T064419Z
 -> username -> username-xq1x | heuristic | score 0.678571
 -> password -> password-l1pp | heuristic | score 0.678571
