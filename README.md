@@ -15,8 +15,13 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 2 — bounded Ollama ambiguity fallback, validated through the supported
-`qa-automation-framework` integration.**
+**Sprint 3 — independent dynamic validation complete for the current
+`data-testid` locator-recovery capability.**
+
+The existing recovery path has now been exercised against the frozen PhoenixQA
+Chaos App across official LOW, MEDIUM and HIGH configurations. Sprint 3 found one
+real Playwright candidate-collection defect at LOW, preserved and corrected it,
+then validated MEDIUM and HIGH without additional product tuning or LLM calls.
 
 Current implementation includes:
 
@@ -36,6 +41,7 @@ Current implementation includes:
 - final pytest outcome correlation,
 - versioned `RepairRecord` JSON persistence with auditable LLM evidence,
 - unit tests, controlled real-browser proofs and unchanged-framework acceptance,
+- independent dynamic browser validation against PhoenixQA LOW/MEDIUM/HIGH,
 - CI quality and browser-repair jobs.
 
 The LLM is not a general healer. Deterministic logic decides whether the model is
@@ -139,10 +145,19 @@ validation before execution.
 ### Cheap recovery before expensive recovery
 
 ```text
-deterministic / heuristic repair
+native Playwright / framework behavior
+-> deterministic / heuristic TestRepairEngine recovery
 -> bounded Ollama fallback only for eligible ambiguity
--> fail closed when repair cannot be validated
+-> fail closed when repair cannot be validated safely
 ```
+
+The current runtime implements the deterministic tier and one bounded local
+Ollama escalation path. More powerful automation is not invoked merely because a
+lower tier failed; the failure state must justify the next tier.
+
+Human review remains the intended terminal authority at the strategy boundary
+when automated evidence cannot justify a safe repair. The current runtime does
+not implement a human-review workflow.
 
 ### Do not make the test pass by weakening it
 
@@ -335,6 +350,58 @@ This validates the supported framework integration for the bounded Sprint 2
 slice. It does not establish general robustness across arbitrary locator
 families, dynamic frontends or enterprise applications.
 
+## Sprint 3 independent dynamic validation
+
+Sprint 3 exercised the existing `data-testid` recovery capability against the
+frozen PhoenixQA Chaos App commit:
+
+```text
+6e28811e37d9498a4d06237e1b26bf06b6159552
+```
+
+The campaign deliberately added no new healing type before observation.
+Authoritative runtime evidence remained outside the repository under
+`TestRepairEngine-local-artifacts`. PhoenixQA's own healer was disabled.
+
+The evidence chain was:
+
+```text
+stable preflight
+-> PASS
+
+LOW selector rotation
+-> fail-before confirmed
+-> first deterministic run exposed TRE-FIND-001
+-> narrow collector correction
+-> unchanged LOW retest PASS
+
+MEDIUM selector rotation + DOM mutation
+-> fail-before confirmed
+-> deterministic recovery PASS
+-> LLM calls 0
+
+HIGH selector rotation + DOM mutation + async delay
+-> fail-before and real timing noise confirmed
+-> five locator interactions recovered deterministically
+-> native Playwright waiting handled the exercised async delay
+-> complete business flow PASS
+-> LLM calls 0
+```
+
+Authoritative MEDIUM recovery evidence is `run-20260822T100403Z`. Authoritative
+HIGH fail-before/timing evidence is `run-20260822T105112Z`, and HIGH recovery
+evidence is `run-20260822T125113Z`.
+
+Sprint 3 therefore did **not** earn a natural LLM escalation slice. No tested
+interaction reached the bounded `AMBIGUOUS` state after the LOW collector defect
+was corrected. Calling Ollama only to demonstrate AI usage would contradict the
+project's escalation policy.
+
+The resulting claim remains bounded: current `data-testid` locator recovery was
+validated across the tested PhoenixQA LOW/MEDIUM/HIGH flows. This does not claim
+generic DOM-mutation healing, timing healing, arbitrary selector-family recovery
+or enterprise-wide robustness.
+
 ## Roadmap
 
 ### Sprint 0 — complete
@@ -351,11 +418,21 @@ Bounded local Ollama fallback for deterministic 2–3 candidate ambiguity,
 auditable LLM evidence, one-shot runtime execution and unchanged-framework
 acceptance.
 
+### Sprint 3 — complete
+
+Independent dynamic validation of the existing `data-testid` recovery capability
+against frozen PhoenixQA LOW/MEDIUM/HIGH. One real collector defect was found at
+LOW, preserved, corrected and retested. MEDIUM and HIGH required no LLM
+escalation; HIGH timing noise was handled by native Playwright waiting.
+
 ### Later validation directions
 
-- independently evolved/dynamic frontend validation,
-- broader locator families only when evidence justifies them,
-- timing/actionability recovery only with observed runtime evidence,
+- broader locator families only when real evidence justifies them,
+- timing/actionability recovery only when native Playwright behavior is genuinely
+  insufficient in a useful real failure,
+- stronger machine or human escalation only when lower tiers cannot resolve a
+  well-evidenced problem safely,
+- externally controlled / enterprise application coverage,
 - pytest-xdist/process-safe correlation,
 - durable maintenance remaining outside TestRepairEngine runtime ownership.
 

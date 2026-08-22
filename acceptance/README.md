@@ -16,6 +16,13 @@ their closure state across independent runtime validation.
 - Product correction and retest use a new commit and a new immutable run.
 - Closing a finding records both the original failure evidence and the separate
   post-fix proof; closure never rewrites the historical failure.
+- A failed recovery or acceptance run is a first-class validation result when it
+  exposes a real product boundary, safe abstention or justified escalation. Do not
+  tune a scenario only to obtain green output.
+- A configured chaos mechanism is not sufficient acceptance evidence by itself;
+  the tested flow must actually exercise the behavior behind the claim.
+- Behavioral success with incorrect run/probe/RepairRecord provenance is useful
+  diagnostic evidence, but it is not the authoritative acceptance record.
 
 ## Findings
 
@@ -24,6 +31,16 @@ their closure state across independent runtime validation.
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
 
 ## Current Sprint 3 validation chain
+
+Frozen PhoenixQA target for the dynamic validation campaign:
+
+```text
+6e28811e37d9498a4d06237e1b26bf06b6159552
+```
+
+Authoritative browser runs used isolated `git archive` snapshots so ignored
+local PhoenixQA `.env` state could not silently change the frozen runtime target.
+PhoenixQA's own healer remained unused.
 
 ```text
 S3.1 stable target preflight
@@ -49,33 +66,88 @@ TRE-FIND-001 remediation
 
 S3.2-B LOW / TRE ON / LLM OFF — post-fix
 -> PASS: run-20260822T064419Z
--> all three original locators fail naturally first
 -> username -> username-xq1x | heuristic | score 0.678571
 -> password -> password-l1pp | heuristic | score 0.678571
 -> btn-login -> btn-login-pxbz | heuristic | score 0.801449
 -> business oracle "Welcome, admin." PASS
 -> LLM calls 0
--> PhoenixQA healer unused
--> TRE-FIND-001 closure criteria satisfied
+
+S3.3-A MEDIUM / TRE OFF
+-> PASS: run-20260822T073152Z
+-> selector_rotation + dom_mutation active
+-> original login locators fail before repair
+
+S3.3-B MEDIUM / TRE ON / LLM OFF
+-> authoritative PASS: run-20260822T100403Z
+-> username/password/btn-login recovered heuristically
+-> business oracle "Welcome, admin." PASS
+-> LLM calls 0
+-> earlier run-20260822T080523Z retained as behavioral PASS only because
+   stale helper provenance made it unsuitable as the authoritative record
+
+S3.4-A HIGH / TRE OFF + timing proof
+-> PASS: run-20260822T105112Z
+-> selector_rotation + dom_mutation + async_delay active
+-> AddItemForm confirmation hidden/absent after submit
+-> confirmation appears after ~972 ms within native 3000 ms wait window
+-> original username/password/btn-login/item-name/btn-add-item test IDs all broken
+
+S3.4-B HIGH / TRE ON / LLM OFF
+-> PASS: run-20260822T125113Z
+-> five original locator interactions fail naturally first
+-> all five recover heuristically
+-> login oracle PASS
+-> Add Item async delay exercised
+-> native Playwright wait ~1886 ms PASS
+-> TRE timing healing used: NO
+-> Add Item oracle PASS
+-> complete business flow PASS
+-> LLM calls 0
+-> repository changes NONE
+
+S3.5 natural LLM escalation
+-> NOT REQUIRED / NOT EARNED
+-> no tested interaction reached bounded AMBIGUOUS
+
+S3.6 additional correction after higher-level validation
+-> NOT REQUIRED
+-> MEDIUM/HIGH exposed no new product defect
 ```
 
-## S3.2 LOW conclusion
+## Sprint 3 conclusion
 
-The LOW selector-rotation validation is now complete with both failure and
-correction evidence preserved.
+Sprint 3 is closed as independent dynamic validation of the existing narrow
+`data-testid` locator-recovery capability.
 
-The original `run-20260820T165756Z` remains the authoritative pre-fix failure.
-The separate `run-20260822T064419Z` proves the corrected behavior on the same
-frozen PhoenixQA commit and the same business oracle.
+The validation did not optimize for a sequence of green runs. LOW first exposed a
+real product defect in candidate collection; that failure was preserved as
+`TRE-FIND-001`, corrected separately and retested against the same frozen target.
+MEDIUM and HIGH then passed without further product tuning.
 
-The validated correction is bounded to candidate collection: an editability
-probe error no longer removes an otherwise valid click candidate before
-deterministic ranking.
-
-No broader healing claim is implied.
-
-The next Sprint 3 validation step is:
+The resulting recovery-tier evidence is:
 
 ```text
-S3.3 — MEDIUM selector drift + DOM mutation
+LOW
+-> deterministic recovery sufficient after TRE-FIND-001 correction
+-> LLM calls 0
+
+MEDIUM
+-> deterministic recovery sufficient while DOM mutation is active
+-> LLM calls 0
+
+HIGH
+-> deterministic recovery sufficient for five broken data-testid interactions
+-> native Playwright waiting sufficient for the exercised async delay
+-> LLM calls 0
 ```
+
+This supports a bounded claim only: current `data-testid` locator recovery
+remained effective across the tested frozen PhoenixQA LOW/MEDIUM/HIGH flows.
+MEDIUM/HIGH do **not** establish generic DOM-mutation healing or timing healing;
+the latter was deliberately left to native Playwright waiting because it was
+already sufficient.
+
+A failed tier remains valid evidence and may justify escalation later. In Sprint
+3, however, deterministic recovery never reached the bounded ambiguity state, so
+an LLM call was not earned. No new Issue is opened merely to manufacture another
+recovery tier or a green closure artifact.

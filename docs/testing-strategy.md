@@ -348,7 +348,7 @@ In particular:
   safe action or when business/domain interpretation is required.
 
 Remote LLM and human-review tiers are strategy boundaries, not claims that the
-current Sprint 2 runtime already implements them.
+current runtime already implements them.
 
 ## Validation maturity
 
@@ -384,6 +384,18 @@ validated and keep broader levels explicitly unproven.
 This maturity model applies across selector, visibility, timing/actionability and
 future healing families. It is intended to improve engineering confidence, not to
 turn TestRepairEngine into a benchmark of model intelligence.
+
+Sprint 3 applied this strategy to the existing `data-testid` locator-recovery
+capability against the independently evolved PhoenixQA Chaos App. LOW first
+exposed a real candidate-collection defect that was preserved, corrected and
+retested. MEDIUM and HIGH then validated the same locator-recovery capability in
+the presence of DOM mutation and, at HIGH, a real asynchronous delay.
+
+The HIGH delay did not justify a new timing-healing path because native Playwright
+waiting was sufficient. Likewise, no tested LOW/MEDIUM/HIGH interaction reached
+the bounded `AMBIGUOUS` state after the collector correction, so local LLM
+escalation was not earned. These results validate the escalation policy; they do
+not establish generic DOM-mutation healing or timing/actionability healing.
 
 ## Acceptance-basis evolution
 
