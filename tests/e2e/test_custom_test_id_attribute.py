@@ -72,19 +72,14 @@ def test_custom_playwright_test_id_attribute_recovers_qualified_fill_drift(
                 page,
                 action=RepairAction.FILL,
                 original_test_id="account-name",
-                retry=lambda replacement: page.get_by_test_id(replacement).fill(
-                    "Jane Doe"
-                ),
+                retry=lambda replacement: page.get_by_test_id(replacement).fill("Jane Doe"),
                 test_id_attribute="data-test",
                 page_object="CheckoutPaymentPage",
                 method_name="fill_account_name",
             )
 
             assert recovered is True
-            assert (
-                page.get_by_test_id("account_name").input_value()
-                == "Jane Doe"
-            )
+            assert page.get_by_test_id("account_name").input_value() == "Jane Doe"
         finally:
             browser.close()
             playwright.selectors.set_test_id_attribute("data-testid")
