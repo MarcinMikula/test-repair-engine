@@ -39,6 +39,7 @@ from test_repair_engine.runtime import (
     repair_enabled,
 )
 
+_DEFAULT_TEST_ID_ATTRIBUTE = "data-testid"
 _MAX_TEST_ID_CANDIDATES = 50
 _NO_RESPONSE_OUTCOMES = {
     OllamaDecisionOutcome.CALL_FAILED,
@@ -58,18 +59,19 @@ _PROVIDER_TO_EVIDENCE_OUTCOME = {
 def collect_test_id_candidates(
     page: Page,
     *,
+    test_id_attribute: str = _DEFAULT_TEST_ID_ATTRIBUTE,
     max_candidates: int = _MAX_TEST_ID_CANDIDATES,
 ) -> list[LocatorCandidate]:
-    """Collect bounded structural metadata without values, text, HTML, or screenshots."""
+    """Collect bounded structural metadata for the configured test-id attribute."""
 
-    locator = page.locator("[data-testid]")
+    locator = page.locator(f"[{test_id_attribute}]")
     count = min(locator.count(), max_candidates)
     candidates: list[LocatorCandidate] = []
 
     for index in range(count):
         element = locator.nth(index)
         try:
-            test_id = element.get_attribute("data-testid")
+            test_id = element.get_attribute(test_id_attribute)
             if not test_id:
                 continue
 
@@ -107,6 +109,7 @@ def recover_test_id_action(
     action: RepairAction,
     original_test_id: str,
     retry: Callable[[str], None],
+    test_id_attribute: str = _DEFAULT_TEST_ID_ATTRIBUTE,
     page_object: str | None = None,
     method_name: str | None = None,
     project_reference: ProjectReference | None = None,
@@ -124,7 +127,10 @@ def recover_test_id_action(
         return False
 
     test_node_id = current_test_node_id()
-    candidates = collect_test_id_candidates(page)
+    candidates = collect_test_id_candidates(
+        page,
+        test_id_attribute=test_id_attribute,
+    )
     selection = select_candidate(original_test_id, action, candidates)
     llm_eligible = selection.status is CandidateSelectionStatus.AMBIGUOUS
     llm_evidence = current_llm_evidence(eligible=llm_eligible)

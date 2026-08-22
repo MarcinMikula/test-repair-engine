@@ -42,8 +42,10 @@ class FakeElement:
         enabled: bool = True,
         editable: bool = False,
         editable_error: bool = False,
+        test_id_attribute: str = "data-testid",
     ) -> None:
         self.test_id = test_id
+        self.test_id_attribute = test_id_attribute
         self.tag_name = tag_name
         self.role = role
         self.visible = visible
@@ -52,7 +54,7 @@ class FakeElement:
         self.editable_error = editable_error
 
     def get_attribute(self, name: str) -> str | None:
-        if name == "data-testid":
+        if name == self.test_id_attribute:
             return self.test_id
         if name == "role":
             return self.role
@@ -193,6 +195,29 @@ def test_adapter_recovers_unique_fill_candidate_and_registers_record(tmp_path: P
     assert record.llm_evidence.eligible is False
     assert record.llm_evidence.call_attempted is False
     assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+
+
+def test_collector_uses_explicit_custom_test_id_attribute() -> None:
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="account_name",
+                test_id_attribute="data-test",
+                tag_name="input",
+                editable=True,
+            ),
+        ]
+    )
+
+    candidates = adapter_module.collect_test_id_candidates(
+        page,
+        test_id_attribute="data-test",
+    )
+
+    assert page.locator_calls == ["[data-test]"]
+    assert len(candidates) == 1
+    assert candidates[0].test_id == "account_name"
+    assert candidates[0].editable is True
 
 
 def test_adapter_keeps_click_candidate_when_editability_probe_is_not_applicable(

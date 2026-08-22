@@ -1,4 +1,4 @@
-﻿"""Regression seam for externally observed custom Playwright test-id semantics."""
+"""Regression seam for externally observed custom Playwright test-id semantics."""
 
 from pathlib import Path
 
@@ -56,33 +56,35 @@ def test_custom_playwright_test_id_attribute_recovers_qualified_fill_drift(
 
     with sync_playwright() as playwright:
         playwright.selectors.set_test_id_attribute("data-test")
-
         browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.set_content(HTML_WITH_REAL_DRIFT_PATTERN)
 
-        with pytest.raises(PlaywrightTimeoutError):
-            page.get_by_test_id("account-name").fill(
-                "Jane Doe",
-                timeout=150,
+        try:
+            page = browser.new_page()
+            page.set_content(HTML_WITH_REAL_DRIFT_PATTERN)
+
+            with pytest.raises(PlaywrightTimeoutError):
+                page.get_by_test_id("account-name").fill(
+                    "Jane Doe",
+                    timeout=150,
+                )
+
+            recovered = recover_test_id_action(
+                page,
+                action=RepairAction.FILL,
+                original_test_id="account-name",
+                retry=lambda replacement: page.get_by_test_id(replacement).fill(
+                    "Jane Doe"
+                ),
+                test_id_attribute="data-test",
+                page_object="CheckoutPaymentPage",
+                method_name="fill_account_name",
             )
 
-        recovered = recover_test_id_action(
-            page,
-            action=RepairAction.FILL,
-            original_test_id="account-name",
-            retry=lambda replacement: page.get_by_test_id(replacement).fill(
-                "Jane Doe"
-            ),
-            test_id_attribute="data-test",
-            page_object="CheckoutPaymentPage",
-            method_name="fill_account_name",
-        )
-
-        assert recovered is True
-        assert (
-            page.get_by_test_id("account_name").input_value()
-            == "Jane Doe"
-        )
-
-        browser.close()
+            assert recovered is True
+            assert (
+                page.get_by_test_id("account_name").input_value()
+                == "Jane Doe"
+            )
+        finally:
+            browser.close()
+            playwright.selectors.set_test_id_attribute("data-testid")
