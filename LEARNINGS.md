@@ -808,6 +808,7 @@ HIGH
 Sprint 3 therefore strengthens the evidence for the existing narrow capability
 without expanding product authority. Future healing breadth should still be
 triggered by a real failure that the current lower tiers cannot solve safely.
+
 ---
 
 ## Sprint 5.1 - prove process identity directly before claiming process-safe correlation

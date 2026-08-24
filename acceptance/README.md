@@ -152,6 +152,7 @@ A failed tier remains valid evidence and may justify escalation later. In Sprint
 3, however, deterministic recovery never reached the bounded ambiguity state, so
 an LLM call was not earned. No new Issue is opened merely to manufacture another
 recovery tier or a green closure artifact.
+
 ---
 
 ## Sprint 5.1 pytest-xdist process-correlation qualification
