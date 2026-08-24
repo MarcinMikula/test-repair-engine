@@ -31,7 +31,7 @@ their closure state across independent runtime validation.
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
 | [`TRE-FIND-002`](findings/TRE-FIND-002.md) | CLOSED | `run-20260822T162252Z` | `run-20260822T171815Z` | Real Toolshop v4-to-v5 `data-test` drift exposed the physical test-id attribute collection gap; the correction was validated live with two deterministic recoveries, valid RepairRecords and zero LLM calls. |
 
-## Current Sprint 3 validation chain
+## Sprint 3 validation chain
 
 Frozen PhoenixQA target for the dynamic validation campaign:
 
@@ -152,3 +152,122 @@ A failed tier remains valid evidence and may justify escalation later. In Sprint
 3, however, deterministic recovery never reached the bounded ambiguity state, so
 an LLM call was not earned. No new Issue is opened merely to manufacture another
 recovery tier or a green closure artifact.
+
+---
+
+## Sprint 5.1 pytest-xdist process-correlation qualification
+
+Sprint 5.1 qualified the existing pytest runtime correlation boundary before
+adding any new repair capability.
+
+The product remained frozen at:
+
+```text
+f713a4299a23a569e3e16913cd669580c9885a55
+```
+
+`pytest-xdist` 3.8.0 was installed only into the local project environment for
+qualification. It was not added to `pyproject.toml`, and no product source or
+committed test was changed.
+
+### Environment preflight lesson
+
+The first pre-run attempt never became an S5.1 evidence run. The shell resolved
+`python` to a user-installed Python 3.12 environment instead of the project
+`.venv`; `pytest-xdist` was therefore installed outside the project environment
+and the TestRepairEngine pytest entry point was unavailable.
+
+The qualification stopped before creating an immutable run directory. The
+environment boundary was corrected by proving `sys.executable` against
+`.venv\Scripts\python.exe` before continuing.
+
+### Attempt 1 - inconclusive harness oracle
+
+```text
+run-20260824T162324Z
+```
+
+Observed behavior:
+
+- pytest produced the intentionally expected `1 passed, 1 failed`,
+- exactly two RepairRecords were persisted,
+- both runtime repairs were `recovered`,
+- the passing test finalized as `test_result=passed`,
+- the deliberately failing test finalized as `test_result=failed`,
+- replacement locators were correct,
+- repair IDs were distinct,
+- LLM calls were zero,
+- repository regression remained green,
+- product source remained unchanged.
+
+The run is **INCONCLUSIVE**, not a TestRepairEngine product failure.
+
+Its oracle incorrectly required distinct TRE `run_id` values as proof of
+different worker processes and assumed external qualification tests would expose
+a file-qualified pytest node ID. The scheduler arrangement also did not directly
+prove that the two active repairs ran in different worker processes.
+
+The run remains immutable because it exposed a validation-harness defect and
+still contains useful positive behavioral evidence.
+
+### Attempt 2 - authoritative explicit-worker PASS
+
+```text
+run-20260824T163032Z
+```
+
+The corrected harness used explicit xdist worker identity and process markers.
+The active scenarios were deliberately bound to separate workers:
+
+```text
+gw0
+PID 3168
+-> search-input -> catalog-search-input
+-> runtime_result=recovered
+-> test_result=passed
+
+gw1
+PID 16708
+-> account-name -> account_name
+-> runtime_result=recovered
+-> test_result=failed
+```
+
+Both worker markers carried the same xdist test-run UID:
+
+```text
+d3c41dfd4af84d649a4e04e3905a178f
+```
+
+Authoritative evidence:
+
+- explicit worker IDs were distinct: `gw0`, `gw1`,
+- worker PIDs were distinct: `3168`, `16708`,
+- both workers belonged to the same distributed xdist run,
+- exactly two RepairRecords were written into one shared output directory,
+- RepairRecord IDs were distinct,
+- pytest node IDs were distinct and correctly correlated,
+- records were explicitly bound to their worker scenarios,
+- both runtime repairs were `recovered`,
+- the `gw0` original test finalized as `passed`,
+- the `gw1` original test finalized as `failed`,
+- TRE process-local run IDs were distinct across the proven workers,
+- no LLM call occurred,
+- repository regression remained `100 passed`,
+- Ruff format and lint checks passed,
+- product changes were `NONE`,
+- working tree remained clean.
+
+### S5.1 conclusion
+
+S5.1 found no product defect and therefore opened no `TRE-FIND-003`.
+
+The bounded evidence supports only this claim:
+
+> TestRepairEngine preserved independent RepairRecord and final pytest-result
+> correlation for runtime repairs executed in two explicitly proven
+> `pytest-xdist` worker processes sharing one RepairRecord output directory.
+
+It does not yet establish general `pytest-xdist` support, high worker counts,
+worker crash/restart recovery, heavy concurrent record volume, shared network
+filesystems, xdist plus Ollama, or external/framework xdist acceptance.

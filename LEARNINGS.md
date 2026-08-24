@@ -808,3 +808,158 @@ HIGH
 Sprint 3 therefore strengthens the evidence for the existing narrow capability
 without expanding product authority. Future healing breadth should still be
 triggered by a real failure that the current lower tiers cannot solve safely.
+
+---
+
+## Sprint 5.1 - prove process identity directly before claiming process-safe correlation
+
+**Review date:** 2026-08-24
+
+**Status:** Validated for one bounded two-worker `pytest-xdist` scenario; no
+product correction required.
+
+### Problem
+
+The roadmap identified pytest-xdist/process-safe correlation as an unproven
+runtime boundary.
+
+The implementation already used process-local runtime state and collision-safe
+RepairRecord publication, but architecture alone could not establish that
+parallel pytest workers would preserve:
+
+- the correct pytest node association,
+- independent pending-repair state,
+- independent failed-test state,
+- final `runtime_result` / `test_result` correlation,
+- collision-free persistence into one shared output directory.
+
+The qualification therefore started with no product change.
+
+### Pre-run lesson - interpreter identity is evidence
+
+An initial environment check exposed a harness problem before an immutable
+qualification run was created.
+
+The shell resolved `python` to a user-installed Python 3.12 environment rather
+than the repository `.venv`. `pytest-xdist` installed into user site-packages and
+the TestRepairEngine pytest plugin was then unavailable.
+
+This was not a TestRepairEngine result. The qualification was stopped and the
+environment boundary was corrected first.
+
+The durable lesson is:
+
+```text
+"virtual environment expected"
+!=
+"interpreter identity proved"
+```
+
+Qualification tooling that depends on an environment must verify the actual
+`sys.executable` before collecting evidence.
+
+### Attempt 1 - useful behavior, invalid process oracle
+
+The first immutable run was:
+
+```text
+run-20260824T162324Z
+```
+
+The behavioral path looked healthy:
+
+- two RepairRecords were persisted,
+- both repairs were `runtime_result=recovered`,
+- one original test finalized as `passed`,
+- one deliberately failed after recovery and finalized as `failed`,
+- repair IDs were distinct,
+- no LLM call occurred,
+- the normal repository regression remained green.
+
+However, the harness tried to infer process isolation from assumptions that had
+not been proved: scheduler placement, TRE `run_id` semantics and incidental
+pytest node-ID formatting.
+
+The run therefore remained **INCONCLUSIVE** rather than being reinterpreted as a
+product failure.
+
+### Attempt 2 - process identity proved directly
+
+The authoritative rerun was:
+
+```text
+run-20260824T163032Z
+```
+
+The corrected harness made worker/process identity an explicit observation:
+
+- `PYTEST_XDIST_WORKER` identified `gw0` and `gw1`,
+- worker markers recorded OS process IDs `3168` and `16708`,
+- both markers carried xdist test-run UID
+  `d3c41dfd4af84d649a4e04e3905a178f`,
+- the PASS repair was explicitly executed only on `gw0`,
+- the FAIL-after-repair scenario was explicitly executed only on `gw1`.
+
+This established two different worker processes inside the same distributed
+pytest run before evaluating TRE correlation.
+
+The resulting RepairRecords remained independent:
+
+```text
+gw0
+-> search-input -> catalog-search-input
+-> runtime_result=recovered
+-> test_result=passed
+
+gw1
+-> account-name -> account_name
+-> runtime_result=recovered
+-> test_result=failed
+```
+
+The records had distinct repair IDs and distinct process-local TRE run IDs while
+sharing the same RepairRecord output directory. No collision or cross-test final
+result leakage occurred.
+
+### Decisions and lessons
+
+1. **Process identity must be observed directly when it is part of the oracle.**
+   Do not infer it from scheduler expectations, `run_id` semantics or incidental
+   node-ID formatting when worker ID and PID can be recorded directly.
+
+2. **A harness defect does not justify a product finding.**
+   Attempt 1 exposed an invalid acceptance assumption. Product code remained
+   frozen while the oracle was corrected. No `TRE-FIND-003` was opened.
+
+3. **Runtime recovery and original-test success remain separate across the tested
+   process boundary.**
+   Both worker repairs succeeded, while their unchanged pytest outcomes diverged
+   exactly as intended: one `passed`, one `failed`.
+
+4. **Shared persistence survived the tested two-process case.**
+   Two workers wrote independent UUID-named RepairRecords into one output
+   directory without destructive overwrite or collision.
+
+5. **A bounded PASS must stay bounded.**
+   S5.1 does not establish unrestricted xdist or concurrency support. It does not
+   cover high worker counts, sustained write pressure, worker restart/crash,
+   distributed/network filesystems, xdist plus Ollama, or framework/external
+   xdist acceptance.
+
+6. **Qualification tooling is not automatically a product dependency.**
+   `pytest-xdist` was installed locally to test the boundary. It should enter
+   `pyproject.toml` only if xdist support becomes an intentionally supported and
+   continuously regression-tested product property.
+
+### Consequence
+
+S5.1 closes without a product change.
+
+The validated claim is deliberately narrow:
+
+> In the tested two-worker pytest-xdist scenario, TestRepairEngine preserved
+> independent runtime-repair evidence and correct final pytest correlation across
+> two proven worker processes sharing one RepairRecord output directory.
+
+Future concurrency work should begin from a new evidence gap rather than
+expanding the claim from this single bounded qualification.
