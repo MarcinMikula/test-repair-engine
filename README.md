@@ -15,7 +15,7 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 4.2 - external historical test-id drift validated against Toolshop.**
+**Sprint 5.1 - bounded pytest-xdist process correlation qualified.**
 
 The logical Playwright `TEST_ID` recovery path now preserves `data-testid` as
 the default physical attribute while allowing callers to explicitly supply the
@@ -23,6 +23,20 @@ custom test-id attribute configured in Playwright. The capability was qualified
 and then independently validated against real Toolshop v4-to-v5
 `account-name`/`account-number` drift, with deterministic recovery and zero LLM
 calls.
+
+Sprint 5.1 then qualified the existing pytest runtime boundary with two explicit
+`pytest-xdist` worker processes and one shared RepairRecord output directory,
+without changing product code. Authoritative run `run-20260824T163032Z` proved
+distinct `gw0` / `gw1` worker identities and PIDs, separate process-local TRE
+run IDs, collision-free record persistence, and correct final pytest correlation
+for one passing and one deliberately failing original test after both runtime
+repairs succeeded.
+
+The earlier `run-20260824T162324Z` remains preserved as inconclusive evidence:
+repair behavior was correct, but the harness tried to infer process identity
+from scheduler, `run_id`, and node-ID-shape assumptions instead of proving it
+directly. S5.1 is therefore a bounded two-process qualification, not a claim of
+unrestricted `pytest-xdist` or general concurrency support.
 
 Current implementation includes:
 
@@ -41,6 +55,8 @@ Current implementation includes:
 - at most one model call and at most one browser retry,
 - opt-in pytest runtime integration,
 - final pytest outcome correlation,
+- bounded two-worker `pytest-xdist` process-correlation qualification using a
+  shared RepairRecord output directory,
 - versioned `RepairRecord` JSON persistence with auditable LLM evidence,
 - unit tests, controlled real-browser proofs and unchanged-framework acceptance,
 - independent dynamic browser validation against PhoenixQA LOW/MEDIUM/HIGH,
@@ -442,6 +458,38 @@ The bounded claim is support for logical `TEST_ID` recovery with an explicitly
 supplied physical test-id attribute. It is not a claim of arbitrary selector
 family recovery.
 
+### Sprint 5.1 - complete
+
+Qualification-only execution tested the existing pytest runtime boundary with
+two proven `pytest-xdist` worker processes and one shared RepairRecord output
+directory.
+
+The first immutable run, `run-20260824T162324Z`, is retained as **INCONCLUSIVE**.
+Its repair behavior was correct, but the harness relied on unproven assumptions
+about scheduler placement, TRE `run_id` semantics and pytest node-ID shape.
+
+The authoritative rerun, `run-20260824T163032Z`, explicitly routed the active
+scenarios to separate workers and recorded their process identity:
+
+```text
+gw0 / PID 3168
+-> runtime_result=recovered
+-> test_result=passed
+
+gw1 / PID 16708
+-> runtime_result=recovered
+-> test_result=failed
+```
+
+Both workers belonged to the same distributed xdist test run, wrote independent
+RepairRecords into one shared output directory, used distinct repair IDs and
+distinct process-local TRE run IDs, and preserved correct node/test-result
+correlation. LLM calls remained zero and no product correction was required.
+
+The bounded claim is process-safe RepairRecord/test-result correlation in the
+tested two-worker scenario. It is not yet a general `pytest-xdist`, high-load,
+worker-restart or distributed-filesystem support claim.
+
 ### Later validation directions
 
 - broader locator families only when real evidence justifies them,
@@ -450,7 +498,8 @@ family recovery.
 - stronger machine or human escalation only when lower tiers cannot resolve a
   well-evidenced problem safely,
 - externally controlled / enterprise application coverage,
-- pytest-xdist/process-safe correlation,
+- broader/high-load `pytest-xdist` and process-safety validation only if support
+  is promoted beyond the current bounded two-worker qualification,
 - durable maintenance remaining outside TestRepairEngine runtime ownership.
 
 ## License
