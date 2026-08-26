@@ -272,6 +272,7 @@ The bounded evidence supports only this claim:
 It does not yet establish general `pytest-xdist` support, high worker counts,
 worker crash/restart recovery, heavy concurrent record volume, shared network
 filesystems, xdist plus Ollama, or external/framework xdist acceptance.
+
 ---
 
 ## Sprint 6 strict-mode / multiple-match qualification

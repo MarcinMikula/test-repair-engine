@@ -1,16 +1,16 @@
-# TRE-FIND-003 â€” strict-mode multiple-match failures do not reach TestRepairEngine through the framework handoff
+# TRE-FIND-003 - strict-mode multiple-match failures do not reach TestRepairEngine through the framework handoff
 
 ## Status
 
-**OPEN â€” evidence-qualified integration-boundary capability gap; correction not yet implemented.**
+**OPEN - evidence-qualified integration-boundary capability gap; correction not yet implemented.**
 
 ## Discovery context
 
 Validation slices:
 
 ~~~text
-S6.1 â€” strict-mode / multiple-match qualification
-S6.2 â€” strict-mode core isolation
+S6.1 - strict-mode / multiple-match qualification
+S6.2 - strict-mode core isolation
 ~~~
 
 Authoritative pre-fix evidence:
@@ -42,14 +42,14 @@ Large runtime artifacts remain outside the repository under:
 
 ~~~text
 TestRepairEngine-local-artifacts/
-â””â”€â”€ acceptance/
-    â”śâ”€â”€ s6.1-strict-mode-qualification/
-    â”‚   â””â”€â”€ run-20260826T160742Z/
-    â””â”€â”€ s6.2-strict-mode-core-isolation/
-        â””â”€â”€ run-20260826T161227Z/
+`-- acceptance/
+    |-- s6.1-strict-mode-qualification/
+    |   `-- run-20260826T160742Z/
+    `-- s6.2-strict-mode-core-isolation/
+        `-- run-20260826T161227Z/
 ~~~
 
-## S6.1 â€” framework handoff observation
+## S6.1 - framework handoff observation
 
 The controlled page exposed two visible buttons with the same original locator:
 
@@ -103,12 +103,12 @@ runtime or harness was disabled. It missed TestRepairEngine because the current
 framework handoff delegates the tested test-id helper only after
 `PlaywrightTimeoutError`.
 
-## S6.2 â€” current TestRepairEngine core isolation
+## S6.2 - current TestRepairEngine core isolation
 
 S6.2 bypassed the framework exception gate and handed the already observed
 strict-mode failure explicitly to the unchanged TestRepairEngine core.
 
-### Case A â€” duplicates only
+### Case A - duplicates only
 
 DOM:
 
@@ -137,7 +137,7 @@ The original strict-mode failure remained the final test oracle.
 This is the desired safe behavior. Duplicate identity alone does not authorize
 TRE to choose one matching element or to bypass Playwright strictness.
 
-### Case B â€” duplicates plus one distinct replacement
+### Case B - duplicates plus one distinct replacement
 
 DOM:
 
