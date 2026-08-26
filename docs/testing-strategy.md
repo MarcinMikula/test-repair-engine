@@ -135,6 +135,29 @@ The controlled target drift and competing candidate belong to the external
 acceptance setup. The framework source, TestRepairEngine source, target test and
 its assertions remain unchanged.
 
+### Parallel pytest qualification
+
+S5.1 qualified the existing pytest runtime correlation boundary with two explicit
+`pytest-xdist` worker processes before promoting xdist to a product dependency or
+general support claim.
+
+The authoritative run is `run-20260824T163032Z`. It proved distinct `gw0` and
+`gw1` worker identities and OS process IDs inside one distributed xdist run. Both
+workers wrote into one shared RepairRecord directory. Both runtime repairs were
+`recovered`; the `gw0` original test finalized as `passed`, while the deliberately
+failing `gw1` original test finalized as `failed`. Repair IDs and process-local
+TRE run IDs remained distinct and no LLM call occurred.
+
+The earlier `run-20260824T162324Z` remains inconclusive because its harness tried
+to infer process identity from scheduler, TRE `run_id`, and pytest node-ID-shape
+assumptions instead of proving worker identity directly.
+
+This validates only the tested two-worker correlation and shared-persistence
+boundary. It does not establish high worker counts, sustained concurrent write
+load, worker crash/restart behavior, network filesystems, xdist plus Ollama, or
+general distributed execution support. `pytest-xdist` therefore remains
+qualification tooling rather than a declared project dependency.
+
 ## STLC alignment
 
 Each runtime repair slice follows:
@@ -482,12 +505,13 @@ by:
 
 ## Deferred validation
 
-Sprint 2 does not attempt to prove:
+Still deferred beyond the currently validated slices:
 
-- general LLM robustness across diverse ambiguity shapes,
-- behavior on independently evolved dynamic frontends,
-- general selector healing beyond the current `data-testid` slice,
+- general LLM robustness across diverse ambiguity shapes and independently
+  evolved dynamic frontends,
+- general locator healing beyond the current logical `TEST_ID` slice,
 - timing/actionability repair,
-- pytest-xdist/process-safe correlation,
+- broad pytest-xdist/concurrency guarantees beyond the bounded two-worker S5.1
+  qualification,
 - enterprise application coverage,
 - automatic durable source updates.
