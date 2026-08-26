@@ -208,7 +208,7 @@ The package registers a pytest plugin, but repair remains opt-in through:
 
 The plugin owns only runtime correlation:
 
-1. create one run ID for the pytest session,
+1. create one process-local run ID for each pytest process/session,
 2. associate repairs with the current pytest node ID,
 3. remember whether any pytest phase failed,
 4. finalize pending repair records after teardown,
@@ -223,6 +223,12 @@ TEST_VALIDATED
 ```
 
 A recovered interaction followed by a failed assertion remains a failed test.
+
+Under `pytest-xdist`, each worker process initializes its own process-local TRE
+runtime state and run ID. S5.1 directly qualified two explicit worker processes
+writing independent RepairRecords into one shared output directory while
+preserving separate final pytest outcomes. That evidence is bounded to the tested
+two-worker scenario and does not establish unrestricted concurrency guarantees.
 
 ## TestCartographer boundary
 
@@ -240,12 +246,12 @@ TestCartographer remains responsible for deciding whether the project context is
 still compatible and whether durable maintenance requires re-observation,
 repository resnapshot, review, or a source update.
 
-## Current Sprint 2 boundary
+## Current validated boundary
 
 Implemented in TestRepairEngine:
 
 - strict locator-repair contracts,
-- deterministic `data-testid` ranking,
+- deterministic logical `TEST_ID` ranking with `data-testid` as the default and explicit custom physical test-id attribute support,
 - bounded Playwright candidate collection,
 - explicit bounded-ambiguity classification,
 - optional one-call Ollama proposal only for 2–3 candidate ambiguity,
@@ -265,5 +271,5 @@ Still outside the current boundary:
 - source-code patching,
 - TestCartographer compatibility interpretation,
 - API/SOM repair,
-- concurrent pytest/xdist guarantees,
+- general pytest-xdist/concurrency guarantees beyond the bounded two-worker S5.1 qualification,
 - general LLM robustness across independently evolved dynamic frontends.
