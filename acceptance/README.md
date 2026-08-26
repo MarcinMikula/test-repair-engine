@@ -30,6 +30,7 @@ their closure state across independent runtime validation.
 |---|---|---|---|---|
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
 | [`TRE-FIND-002`](findings/TRE-FIND-002.md) | CLOSED | `run-20260822T162252Z` | `run-20260822T171815Z` | Real Toolshop v4-to-v5 `data-test` drift exposed the physical test-id attribute collection gap; the correction was validated live with two deterministic recoveries, valid RepairRecords and zero LLM calls. |
+| [`TRE-FIND-003`](findings/TRE-FIND-003.md) | OPEN | `run-20260826T160742Z` + `run-20260826T161227Z` | - | Real Playwright strict-mode multiple-match evidence showed that the framework timeout-only handoff can bypass TRE even when the unchanged deterministic core can recover a distinct safe replacement after explicit delegation; duplicate-only evidence still fails closed. |
 
 ## Sprint 3 validation chain
 
@@ -271,3 +272,107 @@ The bounded evidence supports only this claim:
 It does not yet establish general `pytest-xdist` support, high worker counts,
 worker crash/restart recovery, heavy concurrent record volume, shared network
 filesystems, xdist plus Ollama, or external/framework xdist acceptance.
+---
+
+## Sprint 6 strict-mode / multiple-match qualification
+
+Sprint 6 began with TestRepairEngine product source frozen at:
+
+```text
+d1b5860849b7aa3d93846fa22834a31d278b8ad1
+```
+
+### S6.1 - framework handoff qualification
+
+Authoritative run:
+
+```text
+run-20260826T160742Z
+```
+
+A real browser strict-mode case used two visible elements with the same original
+`data-testid="save-action"`.
+
+Observed:
+
+```text
+matching locator count      = 2
+Playwright Error            = true
+Playwright TimeoutError     = false
+strict-mode violation       = true
+framework repair hook calls = 0
+strict RepairRecords        = 0
+```
+
+The same run proved the existing timeout path was active:
+
+```text
+save-action
+-> catalog-save-action
+-> repair hook calls 1
+-> runtime_result recovered
+-> test_result passed
+-> LLM calls 0
+```
+
+Verdict:
+
+```text
+QUALIFIED_CAPABILITY_GAP
+```
+
+### S6.2 - deterministic core isolation
+
+Authoritative run:
+
+```text
+run-20260826T161227Z
+```
+
+The unchanged TRE core was invoked explicitly after the already observed
+strict-mode failure.
+
+Duplicate-only case:
+
+```text
+save-action
+save-action
+
+collector candidates 2
+ranked candidate_count 0
+runtime_result failed
+test_result failed
+retry calls 0
+LLM calls 0
+```
+
+This preserved safe fail-closed behavior.
+
+Distinct-replacement case:
+
+```text
+save-action
+save-action
+primary-save-action
+
+save-action
+-> primary-save-action
+-> heuristic
+-> score 0.786667
+-> runtime_result recovered
+-> test_result passed
+-> LLM calls 0
+```
+
+Verdict:
+
+```text
+QUALIFIED_HANDOFF_GAP_WITH_BOUNDED_CORE_PATH
+```
+
+Together, S6.1 and S6.2 isolate `TRE-FIND-003` to the framework interaction
+handoff rather than the current deterministic TRE core.
+
+The correction must remain narrow: generic non-timeout Playwright errors must not
+become automatically repairable, and duplicate original test IDs alone must not
+authorize arbitrary element selection.
