@@ -30,7 +30,7 @@ their closure state across independent runtime validation.
 |---|---|---|---|---|
 | [`TRE-FIND-001`](findings/TRE-FIND-001.md) | CLOSED | `run-20260820T165756Z` | `run-20260822T064419Z` | Real Playwright candidate collection dropped the rotated login button after an editability probe error; the narrow collector correction preserves the button as `editable=False`, and the unchanged LOW browser flow now recovers deterministically without LLM use. |
 | [`TRE-FIND-002`](findings/TRE-FIND-002.md) | CLOSED | `run-20260822T162252Z` | `run-20260822T171815Z` | Real Toolshop v4-to-v5 `data-test` drift exposed the physical test-id attribute collection gap; the correction was validated live with two deterministic recoveries, valid RepairRecords and zero LLM calls. |
-| [`TRE-FIND-003`](findings/TRE-FIND-003.md) | OPEN | `run-20260826T160742Z` + `run-20260826T161227Z` | - | Real Playwright strict-mode multiple-match evidence showed that the framework timeout-only handoff can bypass TRE even when the unchanged deterministic core can recover a distinct safe replacement after explicit delegation; duplicate-only evidence still fails closed. |
+| [`TRE-FIND-003`](findings/TRE-FIND-003.md) | CLOSED | `run-20260826T160742Z` + `run-20260826T161227Z` | `run-20260826T173922Z` | Real Playwright strict-mode multiple-match evidence exposed the framework timeout-only handoff gap; framework PR #2 added a narrow multiple-match classifier, and the real post-fix path recovered click/fill deterministically while duplicate-only evidence still failed closed with zero LLM calls. |
 
 ## Sprint 3 validation chain
 
@@ -377,3 +377,115 @@ handoff rather than the current deterministic TRE core.
 The correction must remain narrow: generic non-timeout Playwright errors must not
 become automatically repairable, and duplicate original test IDs alone must not
 authorize arbitrary element selection.
+### S6.3 - framework correction and post-fix closure
+
+`TRE-FIND-003` was corrected at the framework interaction boundary, not in
+TestRepairEngine product source.
+
+Committed framework lineage:
+
+```text
+RED:
+1b2b32e4072739083b384ccd1e2f851a7dc6ad8d
+
+correction:
+0cc9ee3909325eee99c39b4afbd329b178d919d4
+
+style-only follow-up:
+5c77a8235513e5dc202e4b8e343492eae1f3afb6
+
+PR #2:
+fix: delegate qualified strict-mode failures to TRE
+
+merged framework main:
+a7f241cf1670668b88e2b38fe445dab8cd19daa0
+
+QA Framework Tests run #52:
+success
+```
+
+The correction preserves the existing timeout path and generic non-timeout
+Playwright-error protection. Strict-mode delegation is allowed only when the
+error reports a strict mode violation and the current test-id locator still has
+more than one match. Failed count confirmation remains fail-closed.
+
+The first post-fix attempt is retained as non-authoritative evidence:
+
+```text
+run-20260826T173513Z
+INCONCLUSIVE_HARNESS_FIXTURE_FAILURE
+```
+
+Its external harness depended on an unavailable pytest `page` fixture and
+stopped before browser interaction.
+
+Authoritative post-fix run:
+
+```text
+run-20260826T173922Z
+PASSED / AUTHORITATIVE
+```
+
+Real browser/framework/TRE evidence:
+
+```text
+click
+save-action
+-> primary-save-action
+-> heuristic
+-> score 0.786667
+-> runtime_result recovered
+-> test_result passed
+
+fill
+account-name
+-> account_name
+-> heuristic
+-> score 0.975
+-> runtime_result recovered
+-> test_result passed
+
+duplicates only
+save-action
+save-action
+-> no replacement
+-> candidate_count 0
+-> runtime_result failed
+-> test_result failed
+-> original strict-mode Playwright Error preserved
+
+RepairRecords 3
+LLM calls 0
+```
+
+The acceptance pytest result was deliberately:
+
+```text
+1 failed, 2 passed
+```
+
+The one failure is the required duplicate-only fail-closed oracle. It proves
+that the corrected handoff does not authorize arbitrary selection among
+duplicate original test IDs.
+
+Regression gates:
+
+```text
+qa-automation-framework focused BasePage tests 23 passed
+qa-automation-framework full unit suite        117 passed
+TestRepairEngine full suite                    100 passed
+TestRepairEngine Ruff                          PASS
+repositories during acceptance                 CLEAN / FROZEN
+```
+
+Verdict:
+
+```text
+TRE-FIND-003 CLOSED
+```
+
+The bounded supported claim is now that framework test-id click/fill helpers may
+delegate a qualified strict-mode multiple-match failure into the existing TRE
+recovery path while generic non-timeout Playwright errors remain outside repair,
+duplicate-only ambiguity remains fail-closed, and the unchanged original test
+continues to own the final result.
