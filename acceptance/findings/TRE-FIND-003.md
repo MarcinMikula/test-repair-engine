@@ -2,7 +2,7 @@
 
 ## Status
 
-**OPEN - evidence-qualified integration-boundary capability gap; correction not yet implemented.**
+**CLOSED - framework handoff corrected and validated through the real browser/framework/TRE path.**
 
 ## Discovery context
 
@@ -268,11 +268,141 @@ The finding may close only after separate correction evidence proves:
 10. LLM escalation remains unearned unless deterministic evidence is genuinely
     ambiguous.
 
+## Correction and post-fix evidence
+
+The framework-side remediation was implemented in
+`qa-automation-framework` without changing TestRepairEngine product source.
+
+Correction lineage:
+
+~~~text
+framework RED:
+1b2b32e4072739083b384ccd1e2f851a7dc6ad8d
+
+framework product correction:
+0cc9ee3909325eee99c39b4afbd329b178d919d4
+
+style-only follow-up:
+5c77a8235513e5dc202e4b8e343492eae1f3afb6
+
+framework PR:
+#2 - fix: delegate qualified strict-mode failures to TRE
+
+merged framework main:
+a7f241cf1670668b88e2b38fe445dab8cd19daa0
+
+PR CI:
+QA Framework Tests run #52 - success
+~~~
+
+The committed fail-before coverage proved that strict-mode multiple-match click
+and fill interactions bypassed the existing timeout-only handoff before the
+correction while generic non-timeout Playwright errors remained protected.
+
+The correction keeps normal Playwright execution first. A non-timeout error may
+enter the existing TRE handoff only when the Playwright error reports a strict
+mode violation and the current test-id locator still resolves to more than one
+element. Generic non-timeout Playwright errors still bypass TRE, and a failed
+count confirmation fails closed.
+
+The first post-fix browser attempt remains immutable:
+
+~~~text
+run-20260826T173513Z
+INCONCLUSIVE_HARNESS_FIXTURE_FAILURE
+~~~
+
+That attempt never reached browser interaction because its external harness
+depended on a pytest `page` fixture that was not available in the TRE
+environment.
+
+The corrected self-contained real-browser harness produced the authoritative
+post-fix run:
+
+~~~text
+run-20260826T173922Z
+PASSED / AUTHORITATIVE
+~~~
+
+It exercised the real chain:
+
+~~~text
+Chromium
+-> qa-automation-framework BasePage
+-> strict-mode classifier
+-> TestRepairEngine
+-> deterministic retry
+-> unchanged pytest oracle
+~~~
+
+Observed recovery evidence:
+
+~~~text
+click:
+save-action
+-> primary-save-action
+-> heuristic
+-> score 0.786667
+-> runtime_result recovered
+-> test_result passed
+
+fill:
+account-name
+-> account_name
+-> heuristic
+-> score 0.975
+-> runtime_result recovered
+-> test_result passed
+
+duplicate-only:
+save-action
+save-action
+-> no replacement
+-> candidate_count 0
+-> runtime_result failed
+-> test_result failed
+-> original strict-mode Playwright Error preserved
+~~~
+
+Exactly three RepairRecords were produced and all three scenarios recorded
+`LLM called = false`.
+
+The deliberate duplicate-only final failure is acceptance evidence, not a
+regression: TRE correctly abstained and the unchanged original strict-mode
+failure remained the final oracle.
+
+Post-fix regression gates also remained green:
+
+~~~text
+qa-automation-framework focused BasePage tests: 23 passed
+qa-automation-framework full unit suite:        117 passed
+TestRepairEngine full suite:                    100 passed
+TestRepairEngine Ruff format/check:             PASS
+repository product changes during acceptance:   NONE
+~~~
+
+This closes the qualified handoff gap without broadening repair authority,
+changing TRE scoring or thresholds, adding retries, changing locator families,
+or introducing LLM escalation.
+
 ## Current closure state
 
-**OPEN.**
+**CLOSED.**
 
-No correction commit or post-fix acceptance run exists yet.
+Closure basis:
 
-No GitHub Issue is opened merely to duplicate this finding. Remediation begins
-immediately through the evidence-driven framework change path.
+- pre-fix S6.1 proved that the framework timeout-only handoff bypassed the real
+  strict-mode Playwright failure;
+- S6.2 proved that the unchanged TRE core already contained the bounded
+  deterministic recovery path after explicit handoff;
+- committed framework RED preserved the missing click/fill handoff before
+  implementation;
+- framework PR #2 introduced only the narrow strict-mode multiple-match
+  classifier while preserving generic error protection and fail-closed behavior;
+- PR CI completed successfully;
+- `run-20260826T173922Z` validated two real deterministic recoveries and one
+  duplicate-only safe abstention through the corrected framework seam;
+- TestRepairEngine product source remained unchanged;
+- no LLM escalation was used or earned.
+
+No GitHub Issue was required merely to duplicate the repository finding.
