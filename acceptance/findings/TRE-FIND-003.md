@@ -384,6 +384,7 @@ repository product changes during acceptance:   NONE
 This closes the qualified handoff gap without broadening repair authority,
 changing TRE scoring or thresholds, adding retries, changing locator families,
 or introducing LLM escalation.
+
 ## Current closure state
 
 **CLOSED.**

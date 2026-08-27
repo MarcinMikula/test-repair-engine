@@ -377,6 +377,7 @@ handoff rather than the current deterministic TRE core.
 The correction must remain narrow: generic non-timeout Playwright errors must not
 become automatically repairable, and duplicate original test IDs alone must not
 authorize arbitrary element selection.
+
 ### S6.3 - framework correction and post-fix closure
 
 `TRE-FIND-003` was corrected at the framework interaction boundary, not in
