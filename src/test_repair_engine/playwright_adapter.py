@@ -6,7 +6,7 @@ from collections.abc import Callable
 from time import perf_counter_ns
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page
+from playwright.sync_api import Locator, Page
 
 from test_repair_engine.candidate_finder import (
     CandidateSelectionStatus,
@@ -65,6 +65,19 @@ def collect_test_id_candidates(
     """Collect bounded structural metadata for the configured test-id attribute."""
 
     locator = page.locator(f"[{test_id_attribute}]")
+    return _collect_test_id_candidates_from_locator(
+        locator,
+        test_id_attribute=test_id_attribute,
+        max_candidates=max_candidates,
+    )
+
+
+def _collect_test_id_candidates_from_locator(
+    locator: Locator,
+    *,
+    test_id_attribute: str,
+    max_candidates: int,
+) -> list[LocatorCandidate]:
     count = min(locator.count(), max_candidates)
     candidates: list[LocatorCandidate] = []
 
@@ -127,12 +140,43 @@ def recover_test_id_action(
         return False
 
     test_node_id = current_test_node_id()
-    candidates = collect_test_id_candidates(
-        page,
-        test_id_attribute=test_id_attribute,
-    )
-    selection = select_candidate(original_test_id, action, candidates)
-    original_match_count = sum(candidate.test_id == original_test_id for candidate in candidates)
+    locator = page.locator(f"[{test_id_attribute}]")
+
+    try:
+        original_match_count = locator.evaluate_all(
+            """
+            (elements, probe) => elements.filter(
+                element => element.getAttribute(probe.attribute) === probe.value
+            ).length
+            """,
+            {
+                "attribute": test_id_attribute,
+                "value": original_test_id,
+            },
+        )
+    except PlaywrightError:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=action,
+                locator_kind=LocatorKind.TEST_ID,
+                original_locator=original_test_id,
+                candidate_count=0,
+                selected_score=None,
+                reason=(
+                    "Exact original test-id match probe failed; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=current_llm_evidence(eligible=False),
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
 
     if original_match_count == 1:
         register_repair(
@@ -144,7 +188,7 @@ def recover_test_id_action(
                 action=action,
                 locator_kind=LocatorKind.TEST_ID,
                 original_locator=original_test_id,
-                candidate_count=selection.candidate_count,
+                candidate_count=0,
                 selected_score=None,
                 reason=(
                     "Original test-id still resolves exactly once; "
@@ -158,6 +202,12 @@ def recover_test_id_action(
         )
         return False
 
+    candidates = _collect_test_id_candidates_from_locator(
+        locator,
+        test_id_attribute=test_id_attribute,
+        max_candidates=_MAX_TEST_ID_CANDIDATES,
+    )
+    selection = select_candidate(original_test_id, action, candidates)
     llm_eligible = selection.status is CandidateSelectionStatus.AMBIGUOUS
     llm_evidence = current_llm_evidence(eligible=llm_eligible)
 
