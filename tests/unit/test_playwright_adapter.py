@@ -77,8 +77,14 @@ class FakeElement:
 
 
 class FakeLocatorCollection:
-    def __init__(self, elements: list[FakeElement]) -> None:
+    def __init__(
+        self,
+        elements: list[FakeElement],
+        *,
+        evaluate_all_error: bool = False,
+    ) -> None:
         self.elements = elements
+        self.evaluate_all_error = evaluate_all_error
 
     def count(self) -> int:
         return len(self.elements)
@@ -86,15 +92,37 @@ class FakeLocatorCollection:
     def nth(self, index: int) -> FakeElement:
         return self.elements[index]
 
+    def evaluate_all(
+        self,
+        expression: str,
+        arg: dict[str, str],
+    ) -> int:
+        if self.evaluate_all_error:
+            raise PlaywrightError("exact original match probe failed")
+
+        assert "getAttribute" in expression
+        attribute = arg["attribute"]
+        value = arg["value"]
+        return sum(element.get_attribute(attribute) == value for element in self.elements)
+
 
 class FakePage:
-    def __init__(self, elements: list[FakeElement]) -> None:
+    def __init__(
+        self,
+        elements: list[FakeElement],
+        *,
+        exact_probe_error: bool = False,
+    ) -> None:
         self.elements = elements
+        self.exact_probe_error = exact_probe_error
         self.locator_calls: list[str] = []
 
     def locator(self, selector: str) -> FakeLocatorCollection:
         self.locator_calls.append(selector)
-        return FakeLocatorCollection(self.elements)
+        return FakeLocatorCollection(
+            self.elements,
+            evaluate_all_error=self.exact_probe_error,
+        )
 
 
 class StubOllamaProvider:
@@ -270,6 +298,165 @@ def test_adapter_keeps_click_candidate_when_editability_probe_is_not_applicable(
     assert record.llm_evidence.eligible is False
     assert record.llm_evidence.call_attempted is False
     assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
+
+
+def test_click_fails_closed_when_original_test_id_still_resolves(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_disabled_login"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="btn-login",
+                tag_name="button",
+                enabled=False,
+            ),
+            FakeElement(
+                test_id="btn-login-a1b2",
+                tag_name="button",
+                enabled=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.CLICK,
+        original_test_id="btn-login",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "btn-login"
+    assert record.replacement_locator is None
+
+
+def test_fill_fails_closed_when_original_test_id_still_resolves(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_readonly_password"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="password-input",
+                tag_name="input",
+                editable=False,
+            ),
+            FakeElement(
+                test_id="password-input-v2",
+                tag_name="input",
+                editable=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.FILL,
+        original_test_id="password-input",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "password-input"
+    assert record.replacement_locator is None
+
+
+def test_unique_original_beyond_candidate_bound_fails_closed(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_original_beyond_bound"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+
+    elements = [
+        FakeElement(
+            test_id="btn-login-a1b2",
+            tag_name="button",
+            enabled=True,
+        )
+    ]
+    elements.extend(
+        FakeElement(
+            test_id=f"noise-{index:02d}",
+            tag_name="div",
+        )
+        for index in range(49)
+    )
+    elements.append(
+        FakeElement(
+            test_id="btn-login",
+            tag_name="button",
+            enabled=False,
+        )
+    )
+
+    page = FakePage(elements)
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.CLICK,
+        original_test_id="btn-login",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "btn-login"
+    assert record.replacement_locator is None
+
+
+def test_exact_original_match_probe_failure_fails_closed(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_exact_probe_failure"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="btn-login-a1b2",
+                tag_name="button",
+                enabled=True,
+            ),
+        ],
+        exact_probe_error=True,
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.CLICK,
+        original_test_id="btn-login",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "btn-login"
+    assert record.replacement_locator is None
 
 
 def test_deterministic_winner_never_calls_llm_even_when_enabled(
