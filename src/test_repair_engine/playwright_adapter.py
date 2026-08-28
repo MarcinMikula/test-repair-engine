@@ -132,6 +132,32 @@ def recover_test_id_action(
         test_id_attribute=test_id_attribute,
     )
     selection = select_candidate(original_test_id, action, candidates)
+    original_match_count = sum(candidate.test_id == original_test_id for candidate in candidates)
+
+    if original_match_count == 1:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=action,
+                locator_kind=LocatorKind.TEST_ID,
+                original_locator=original_test_id,
+                candidate_count=selection.candidate_count,
+                selected_score=None,
+                reason=(
+                    "Original test-id still resolves exactly once; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=current_llm_evidence(eligible=False),
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
     llm_eligible = selection.status is CandidateSelectionStatus.AMBIGUOUS
     llm_evidence = current_llm_evidence(eligible=llm_eligible)
 
