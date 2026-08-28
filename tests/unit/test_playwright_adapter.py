@@ -272,6 +272,82 @@ def test_adapter_keeps_click_candidate_when_editability_probe_is_not_applicable(
     assert record.llm_evidence.outcome is LLMEvidenceOutcome.NOT_CALLED
 
 
+def test_click_fails_closed_when_original_test_id_still_resolves(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_disabled_login"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="btn-login",
+                tag_name="button",
+                enabled=False,
+            ),
+            FakeElement(
+                test_id="btn-login-a1b2",
+                tag_name="button",
+                enabled=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.CLICK,
+        original_test_id="btn-login",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "btn-login"
+    assert record.replacement_locator is None
+
+
+def test_fill_fails_closed_when_original_test_id_still_resolves(
+    tmp_path: Path,
+) -> None:
+    node_id = "tests/e2e/test_login.py::test_readonly_password"
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+    page = FakePage(
+        [
+            FakeElement(
+                test_id="password-input",
+                tag_name="input",
+                editable=False,
+            ),
+            FakeElement(
+                test_id="password-input-v2",
+                tag_name="input",
+                editable=True,
+            ),
+        ]
+    )
+    retried_with: list[str] = []
+
+    recovered = recover_test_id_action(
+        page,
+        action=RepairAction.FILL,
+        original_test_id="password-input",
+        retry=retried_with.append,
+    )
+
+    assert recovered is False
+    assert retried_with == []
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.original_locator == "password-input"
+    assert record.replacement_locator is None
+
+
 def test_deterministic_winner_never_calls_llm_even_when_enabled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
