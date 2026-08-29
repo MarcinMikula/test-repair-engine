@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from time import perf_counter_ns
 
@@ -293,6 +294,257 @@ def recover_test_id_action(
             candidate_count=selection.candidate_count,
             selected_score=selected_score,
             reason=reason,
+            runtime_result=RepairOutcome.RECOVERED,
+            llm_evidence=llm_evidence,
+            project_reference=project_reference,
+            cartographer_traceability=cartographer_traceability,
+        )
+    )
+    return True
+
+
+_ROLE_NAME_TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _role_link_insertion_pattern(original_accessible_name: str) -> re.Pattern[str]:
+    "Build the qualified insertion-only accessible-name regex."
+
+    tokens = tuple(_ROLE_NAME_TOKEN_PATTERN.findall(original_accessible_name.casefold()))
+    if not tokens:
+        raise ValueError("Original accessible name must contain alphanumeric tokens.")
+
+    escaped = [re.escape(token) for token in tokens]
+    pattern = "^" + r"\b.*?\b".join(escaped) + "$"
+    return re.compile(pattern, re.IGNORECASE | re.DOTALL)
+
+
+def recover_role_link_click(
+    page: Page,
+    *,
+    original_accessible_name: str,
+    retry: Callable[[re.Pattern[str]], None],
+    page_object: str | None = None,
+    method_name: str | None = None,
+    project_reference: ProjectReference | None = None,
+    cartographer_traceability: CartographerTraceability | None = None,
+) -> bool:
+    "Attempt the qualified ROLE=link insertion-expansion CLICK repair."
+
+    if not repair_enabled():
+        return False
+
+    test_node_id = current_test_node_id()
+    llm_evidence = current_llm_evidence(eligible=False)
+
+    try:
+        original_match_count = page.get_by_role(
+            "link",
+            name=original_accessible_name,
+            exact=True,
+        ).count()
+    except PlaywrightError:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=0,
+                selected_score=None,
+                reason=(
+                    "Exact original role-link accessible-name probe failed; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    if original_match_count != 0:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=0,
+                selected_score=None,
+                reason=(
+                    "Original role-link accessible name still resolves; "
+                    "insertion-expansion repair is authorized only for zero-match drift."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    try:
+        replacement_pattern = _role_link_insertion_pattern(original_accessible_name)
+        candidate = page.get_by_role(
+            "link",
+            name=replacement_pattern,
+        )
+        candidate_count = candidate.count()
+    except (PlaywrightError, ValueError):
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=0,
+                selected_score=None,
+                reason=(
+                    "Role-link insertion candidate probe failed; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    if candidate_count != 1:
+        reason = (
+            "No role-link insertion-expansion candidate matched."
+            if candidate_count == 0
+            else (
+                "Multiple role-link insertion-expansion candidates matched; "
+                "ambiguous substitution is not authorized."
+            )
+        )
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=candidate_count,
+                selected_score=None,
+                reason=reason,
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    try:
+        visible = candidate.is_visible()
+        enabled = candidate.is_enabled()
+    except PlaywrightError:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=1,
+                selected_score=None,
+                reason=(
+                    "Role-link candidate actionability probe failed; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    if not visible or not enabled:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                candidate_count=1,
+                selected_score=None,
+                reason=(
+                    "Unique role-link insertion candidate is not visible and enabled; "
+                    "locator substitution is not authorized."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    try:
+        retry(replacement_pattern)
+    except PlaywrightError:
+        register_repair(
+            RepairRecord(
+                run_id=current_run_id(),
+                test_node_id=test_node_id,
+                page_object=page_object,
+                method_name=method_name,
+                action=RepairAction.CLICK,
+                locator_kind=LocatorKind.ROLE_LINK,
+                original_locator=original_accessible_name,
+                replacement_locator=replacement_pattern.pattern,
+                repair_method=RepairMethod.HEURISTIC,
+                candidate_count=1,
+                selected_score=None,
+                reason=(
+                    "Selected role-link insertion candidate did not recover "
+                    "the Playwright interaction."
+                ),
+                runtime_result=RepairOutcome.FAILED,
+                llm_evidence=llm_evidence,
+                project_reference=project_reference,
+                cartographer_traceability=cartographer_traceability,
+            )
+        )
+        return False
+
+    register_repair(
+        RepairRecord(
+            run_id=current_run_id(),
+            test_node_id=test_node_id,
+            page_object=page_object,
+            method_name=method_name,
+            action=RepairAction.CLICK,
+            locator_kind=LocatorKind.ROLE_LINK,
+            original_locator=original_accessible_name,
+            replacement_locator=replacement_pattern.pattern,
+            repair_method=RepairMethod.HEURISTIC,
+            candidate_count=1,
+            selected_score=None,
+            reason=(
+                "Unique visible and enabled role-link insertion expansion authorized one retry."
+            ),
             runtime_result=RepairOutcome.RECOVERED,
             llm_evidence=llm_evidence,
             project_reference=project_reference,
