@@ -36,7 +36,18 @@ class LocatorKind(StrEnum):
     """Locator families currently understood by TestRepairEngine."""
 
     TEST_ID = "test_id"
-    ROLE = "role"
+    ROLE_LINK = "role_link"
+
+
+def _validate_locator_action_authority(
+    *,
+    locator_kind: LocatorKind,
+    action: RepairAction,
+) -> None:
+    """Reject locator/action combinations outside qualified TRE authority."""
+
+    if locator_kind is LocatorKind.ROLE_LINK and action is not RepairAction.CLICK:
+        raise ValueError("ROLE_LINK locator only supports click.")
 
 
 class RepairMethod(StrEnum):
@@ -186,6 +197,16 @@ class RepairRequest(StrictContract):
     project_reference: ProjectReference | None = None
     cartographer_traceability: CartographerTraceability | None = None
 
+    @model_validator(mode="after")
+    def locator_action_must_match_authority(self) -> RepairRequest:
+        """Keep RepairRequest inside qualified locator/action authority."""
+
+        _validate_locator_action_authority(
+            locator_kind=self.locator_kind,
+            action=self.action,
+        )
+        return self
+
 
 class RepairResult(StrictContract):
     """Result returned by one completed TestRepairEngine recovery attempt."""
@@ -244,6 +265,16 @@ class RepairRecord(StrictContract):
 
     project_reference: ProjectReference | None = None
     cartographer_traceability: CartographerTraceability | None = None
+
+    @model_validator(mode="after")
+    def locator_action_must_match_authority(self) -> RepairRecord:
+        """Keep persisted evidence inside qualified locator/action authority."""
+
+        _validate_locator_action_authority(
+            locator_kind=self.locator_kind,
+            action=self.action,
+        )
+        return self
 
     @model_validator(mode="after")
     def schema_version_must_match_llm_evidence(self) -> RepairRecord:
