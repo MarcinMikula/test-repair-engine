@@ -43,9 +43,10 @@ optional project/context traceability
 The runtime callback used to retry a fill may close over the input value, but the
 value is not inspected or persisted by TestRepairEngine.
 
-If TestRepairEngine is not installed, not enabled, cannot find a safe candidate,
-or cannot recover the retry, the original Playwright failure remains
-controlling.
+If TestRepairEngine is not installed or enabled, the framework classifier does
+not authorize handoff, TRE cannot verify the original-target safety boundary,
+no safe candidate exists, or the retry cannot be recovered, the original
+Playwright failure remains controlling.
 
 ## Boundary 2 — runtime recovery
 

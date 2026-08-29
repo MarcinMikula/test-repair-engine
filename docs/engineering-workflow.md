@@ -106,7 +106,8 @@ reproduce
 
 ### Reproduce
 
-For a new capability/safety gap, enter this RED loop only after qualification has established that correction is required.
+For a new capability/safety gap, enter this RED loop only after qualification
+has established that correction is required.
 
 Build the tightest practical feedback loop that detects the exact reported
 symptom. Prefer, in order:

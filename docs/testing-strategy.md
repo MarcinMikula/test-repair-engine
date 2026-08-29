@@ -12,8 +12,13 @@ behavior.
 
 The central product question is:
 
-> Can TestRepairEngine recover the failed technical interaction and allow the
-> unchanged original test to pass?
+> Can TestRepairEngine recover a qualified failed technical interaction when
+> evidence safely authorizes a replacement, and preserve the original failure
+> when it does not?
+
+Testing therefore measures both recovery effectiveness and refusal safety. A
+green test obtained through an unauthorized substitution is worse than a
+correctly preserved original failure.
 
 ## Test levels
 

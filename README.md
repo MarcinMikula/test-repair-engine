@@ -20,9 +20,10 @@ validated across controlled browser evidence, frozen PhoenixQA, live Toolshop,
 and the final merged-main integration.**
 
 The current runtime remains deliberately narrow. TestRepairEngine recovers
-logical Playwright `TEST_ID` locator drift, with `data-testid` as the default
-physical attribute and an explicitly supplied custom Playwright test-id attribute
-when required.
+qualified logical Playwright `TEST_ID` interaction failures: zero-match locator
+drift and the separately qualified strict-mode multiple-match path.
+`data-testid` remains the default physical attribute, with an explicitly
+supplied custom Playwright test-id attribute when required.
 
 The validated framework/TRE safety boundary is:
 
@@ -128,8 +129,10 @@ runtime repair should become a permanent source change.
 
 ## Product goal
 
-Automatically recover common technical failures in Playwright tests and provide
-validated repair evidence for durable maintenance by TestCartographer.
+Recover qualified technical locator failures in Playwright tests when evidence
+authorizes a safe bounded substitution, preserve the original failure when it
+does not, and provide validated repair evidence for durable maintenance by
+TestCartographer.
 
 ## Design principles
 

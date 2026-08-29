@@ -977,7 +977,8 @@ result leakage occurred.
 
 2. **A harness defect does not justify a product finding.**
    Attempt 1 exposed an invalid acceptance assumption. Product code remained
-   frozen while the oracle was corrected. No `TRE-FIND-003` was opened.
+   frozen while the oracle was corrected. No product finding was opened for
+   S5.1.
 
 3. **Runtime recovery and original-test success remain separate across the tested
    process boundary.**
