@@ -15,56 +15,60 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 5.1 - bounded pytest-xdist process correlation qualified.**
+**Sprint 7 closed - locator-repair eligibility and redirection safety are now
+validated across controlled browser evidence, frozen PhoenixQA, live Toolshop,
+and the final merged-main integration.**
 
-The logical Playwright `TEST_ID` recovery path now preserves `data-testid` as
-the default physical attribute while allowing callers to explicitly supply the
-custom test-id attribute configured in Playwright. The capability was qualified
-and then independently validated against real Toolshop v4-to-v5
-`account-name`/`account-number` drift, with deterministic recovery and zero LLM
-calls.
+The current runtime remains deliberately narrow. TestRepairEngine recovers
+logical Playwright `TEST_ID` locator drift, with `data-testid` as the default
+physical attribute and an explicitly supplied custom Playwright test-id attribute
+when required.
 
-Sprint 5.1 then qualified the existing pytest runtime boundary with two explicit
-`pytest-xdist` worker processes and one shared RepairRecord output directory,
-without changing product code. Authoritative run `run-20260824T163032Z` proved
-distinct `gw0` / `gw1` worker identities and PIDs, separate process-local TRE
-run IDs, collision-free record persistence, and correct final pytest correlation
-for one passing and one deliberately failing original test after both runtime
-repairs succeeded.
+The validated framework/TRE safety boundary is:
 
-The earlier `run-20260824T162324Z` remains preserved as inconclusive evidence:
-repair behavior was correct, but the harness tried to infer process identity
-from scheduler, `run_id`, and node-ID-shape assumptions instead of proving it
-directly. S5.1 is therefore a bounded two-process qualification, not a claim of
-unrestricted `pytest-xdist` or general concurrency support.
+```text
+normal Playwright action
+-> success -> continue unchanged test
 
-Current implementation includes:
+-> TimeoutError
+   -> original test-id count == 0
+      -> locator-drift handoff may enter TRE
+   -> original test-id count == 1
+      -> preserve original Playwright failure
 
-- installable Python package,
-- strict repair contracts,
-- exact opaque ProjectProfile identity compatible with the current
-  TestCartographer naming boundary,
-- deterministic logical `TEST_ID` candidate ranking with `data-testid` as the
-  default and explicit custom Playwright test-id attribute support,
-- action compatibility checks for `fill` and `click`,
-- bounded Playwright candidate collection,
-- explicit deterministic states for no candidate, weak evidence, bounded
-  ambiguity, too-broad ambiguity and unique selection,
-- an opt-in local Ollama fallback only for bounded 2–3 candidate ambiguity,
-- exact local validation of the model response before execution,
+-> qualified strict-mode violation
+   -> original test-id count > 1
+   -> bounded TRE handoff may run
+
+-> generic non-timeout Playwright error
+   -> preserve original failure
+```
+
+TRE also verifies the original test-id independently before substitution. Exact
+original count `1`, or failure of that exact probe, fails closed. The probe is
+independent of the bounded candidate shortlist.
+
+Current validated implementation includes:
+
+- installable Python package and opt-in pytest runtime integration,
+- strict contracts and immutable versioned RepairRecord persistence,
+- deterministic logical `TEST_ID` candidate ranking,
+- default `data-testid` plus explicit custom physical test-id attribute support,
+- bounded candidate collection plus exact unbounded original-count protection,
+- action compatibility for `fill` and `click`,
+- explicit no-candidate / weak / ambiguity / too-broad / selected states,
+- optional one-call Ollama fallback only for bounded 2-3 candidate ambiguity,
+- exact local validation of model output before execution,
 - at most one model call and at most one browser retry,
-- opt-in pytest runtime integration,
-- final pytest outcome correlation,
-- bounded two-worker `pytest-xdist` process-correlation qualification using a
-  shared RepairRecord output directory,
-- versioned `RepairRecord` JSON persistence with auditable LLM evidence,
-- unit tests, controlled real-browser proofs and unchanged-framework acceptance,
-- independent dynamic browser validation against PhoenixQA LOW/MEDIUM/HIGH,
-- CI quality and browser-repair jobs.
+- final pytest result correlation,
+- bounded two-worker pytest-xdist qualification,
+- qualified strict-mode multiple-match framework handoff,
+- fail-closed protection against actionability-to-locator redirection,
+- independent PhoenixQA, Toolshop and merged-main validation.
 
-The LLM is not a general healer. Deterministic logic decides whether the model is
-eligible to act and re-validates any proposed replacement before a browser side
-effect.
+Native Playwright/framework behavior remains first authority. The LLM is only a
+bounded proposal mechanism, and the unchanged original test remains the final
+oracle.
 
 ## Ecosystem role
 
@@ -422,85 +426,116 @@ or enterprise-wide robustness.
 
 ## Roadmap
 
-### Sprint 0 — complete
+### Sprint 0 - complete
 
-Executable project skeleton and ecosystem contracts.
+Established the executable package, strict contracts, deterministic JSON
+evidence persistence, CI, ecosystem boundaries, and the rule that runtime
+recovery is separate from final unchanged-test success.
 
-### Sprint 1 — complete
+### Sprint 1 - complete
 
-Deterministic `data-testid` locator recovery and unchanged-test validation.
+Implemented conservative deterministic logical `TEST_ID` recovery with action
+compatibility, score/margin gates, safe abstention, one retry, real-browser
+fail-before/recover-after proof, and unchanged-test validation.
 
-### Sprint 2 — complete
+### Sprint 2 - complete
 
-Bounded local Ollama fallback for deterministic 2–3 candidate ambiguity,
-auditable LLM evidence, one-shot runtime execution and unchanged-framework
-acceptance.
+Added a bounded local Ollama fallback only for deterministic 2-3 candidate
+ambiguity. Provider output is structured, locally allowlisted and revalidated
+before any browser side effect.
 
-### Sprint 3 — complete
+Authoritative framework acceptance:
+`run-20260819T171427Z`.
 
-Independent dynamic validation of the existing `data-testid` recovery capability
-against frozen PhoenixQA LOW/MEDIUM/HIGH. One real collector defect was found at
-LOW, preserved, corrected and retested. MEDIUM and HIGH required no LLM
-escalation; HIGH timing noise was handled by native Playwright waiting.
+### Sprint 3 - complete
+
+Validated locator recovery against frozen PhoenixQA LOW/MEDIUM/HIGH without
+adding speculative healing. LOW exposed `TRE-FIND-001`, a real candidate
+collection defect; the narrow correction was retested. MEDIUM and HIGH then
+passed deterministically with zero LLM calls. Native Playwright waiting was
+sufficient for the exercised HIGH async delay.
 
 ### Sprint 4.1 / 4.2 - complete
 
-External Toolshop qualification confirmed real historical
-`account-name` -> `account_name` and `account-number` -> `account_number`
-test-id drift while Playwright used the physical `data-test` attribute.
-
-The resulting capability gap was preserved as the acceptance finding
-`TRE-FIND-002`, corrected by making the physical Playwright test-id attribute
-explicit at the adapter boundary, and validated in a separate live post-fix
-run. Both repairs remained deterministic and required zero LLM calls.
-
-The bounded claim is support for logical `TEST_ID` recovery with an explicitly
-supplied physical test-id attribute. It is not a claim of arbitrary selector
-family recovery.
+Live Toolshop v4/v5 evidence qualified historical test-id drift while Playwright
+used `data-test`. `TRE-FIND-002` isolated the gap to the physical test-id
+attribute. The adapter now keeps `data-testid` as default while accepting an
+explicit custom attribute. Live post-fix recovery remained deterministic with
+zero LLM calls.
 
 ### Sprint 5.1 - complete
 
-Qualification-only execution tested the existing pytest runtime boundary with
-two proven `pytest-xdist` worker processes and one shared RepairRecord output
-directory.
+Qualified the pytest runtime boundary with two explicitly proven pytest-xdist
+worker processes sharing one RepairRecord directory. The first immutable run was
+inconclusive because process identity was inferred; authoritative
+`run-20260824T163032Z` recorded worker IDs/PIDs directly. No product correction
+was required.
 
-The first immutable run, `run-20260824T162324Z`, is retained as **INCONCLUSIVE**.
-Its repair behavior was correct, but the harness relied on unproven assumptions
-about scheduler placement, TRE `run_id` semantics and pytest node-ID shape.
+### Sprint 6 - complete
 
-The authoritative rerun, `run-20260824T163032Z`, explicitly routed the active
-scenarios to separate workers and recorded their process identity:
+Qualified a strict-mode multiple-match integration gap before implementation.
+S6.1 proved that real strict-mode failure bypassed the framework timeout-only
+handoff. S6.2 proved the unchanged TRE core failed closed on duplicate-only
+evidence and could recover only with a distinct safe replacement.
+
+`TRE-FIND-003` was corrected at the framework seam with a narrow strict-mode
+classifier. Generic non-timeout errors remain protected.
+
+Authoritative post-fix:
+`run-20260826T173922Z`.
+
+### Sprint 7 - complete
+
+Qualified and closed a cross-layer false-pass risk. Three independent pre-fix
+levels proved that broad timeout delegation could redirect CLICK/FILL when the
+original test-id still resolved uniquely but was non-actionable.
 
 ```text
-gw0 / PID 3168
--> runtime_result=recovered
--> test_result=passed
+S7.1 controlled browser matrix
+-> CLICK + FILL risk
 
-gw1 / PID 16708
--> runtime_result=recovered
--> test_result=failed
+S7.2 frozen PhoenixQA
+-> CLICK + FILL risk
+
+S7.3 live Toolshop
+-> CLICK risk
 ```
 
-Both workers belonged to the same distributed xdist test run, wrote independent
-RepairRecords into one shared output directory, used distinct repair IDs and
-distinct process-local TRE run IDs, and preserved correct node/test-result
-correlation. LLM calls remained zero and no product correction was required.
+`TRE-FIND-004` introduced two independent boundaries:
 
-The bounded claim is process-safe RepairRecord/test-result correlation in the
-tested two-worker scenario. It is not yet a general `pytest-xdist`, high-load,
-worker-restart or distributed-filesystem support claim.
+```text
+qa-automation-framework
+-> TimeoutError enters locator repair only when original count == 0
 
-### Later validation directions
+TestRepairEngine
+-> exact unbounded original-count probe before substitution
+-> count == 1 or probe failure -> fail closed
+```
 
-- broader locator families only when real evidence justifies them,
-- timing/actionability recovery only when native Playwright behavior is genuinely
-  insufficient in a useful real failure,
-- stronger machine or human escalation only when lower tiers cannot resolve a
-  well-evidenced problem safely,
-- externally controlled / enterprise application coverage,
-- broader/high-load `pytest-xdist` and process-safety validation only if support
-  is promoted beyond the current bounded two-worker qualification,
-- durable maintenance remaining outside TestRepairEngine runtime ownership.
+Post-fix S7.1/S7.2/S7.3 blocked redirection while preserving zero-match drift and
+the separately qualified strict-mode path.
+
+Final merged-main gate:
+`run-20260828T171602Z`
+`VERIFIED_MERGED_MAIN_TRE_FIND_004_CLOSURE_GATE`.
+
+### Current frontier
+
+The next capability is not pre-authorized merely because another sprint starts.
+New work begins with qualification: define failure class, risk, seam, oracle,
+ownership and supported authority tier, then prove a real gap exists before
+product implementation.
+
+Potential later directions:
+
+- broader locator families only when evidence justifies them,
+- timing/actionability healing only when native Playwright is genuinely
+  insufficient for a useful real failure,
+- stronger machine or human escalation only when lower tiers are insufficient,
+- broader external/enterprise application coverage,
+- broader pytest-xdist validation if support is intentionally promoted,
+- API/SOM repair only after separate qualification,
+- durable maintenance remaining outside TRE runtime ownership.
 
 ## License
 

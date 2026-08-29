@@ -27,6 +27,7 @@ Fast deterministic tests cover:
 - action compatibility,
 - ambiguity abstention,
 - Playwright adapter orchestration with bounded fakes,
+- exact original test-id count fail-closed protection,
 - runtime repair registration,
 - final test-outcome correlation,
 - RepairRecord persistence and collision-safe immutability.
@@ -158,6 +159,69 @@ load, worker crash/restart behavior, network filesystems, xdist plus Ollama, or
 general distributed execution support. `pytest-xdist` therefore remains
 qualification tooling rather than a declared project dependency.
 
+### Strict-mode and actionability safety qualification
+
+Sprint 6 and Sprint 7 validated repair eligibility and substitution safety rather
+than generic actionability healing.
+
+```text
+S6.1 run-20260826T160742Z
+-> strict-mode failure bypassed timeout-only framework handoff
+
+S6.2 run-20260826T161227Z
+-> duplicates only: fail closed
+-> duplicates + distinct replacement: bounded core path
+
+post-fix run-20260826T173922Z
+-> strict-mode handoff corrected
+```
+
+Sprint 7 pre-fix evidence:
+
+```text
+S7.1 run-20260827T163820Z
+-> controlled CLICK + FILL redirection risk
+
+S7.2 run-20260827T174917Z
+-> PhoenixQA CLICK + FILL risk
+
+S7.3 run-20260827T181300Z
+-> Toolshop CLICK risk
+```
+
+Post-fix:
+
+```text
+run-20260828T162811Z
+-> controlled CLICK + FILL blocked
+
+run-20260828T163708Z
+-> PhoenixQA CLICK + FILL blocked
+
+run-20260828T164909Z
+-> Toolshop CLICK blocked
+
+run-20260828T171602Z
+-> merged-main closure gate PASS
+```
+
+The safety oracle is:
+
+```text
+zero-match drift
+-> recovery remains available
+
+qualified strict mode
+-> bounded recovery remains available
+
+unique non-actionable original
+-> no locator substitution
+-> original Playwright failure preserved
+```
+
+This validates actionability classification safety, not generic actionability
+healing.
+
 ## STLC alignment
 
 Each runtime repair slice follows:
@@ -266,7 +330,7 @@ TestRepairEngine still owns individual runtime repair records, while broader
 validation-run packaging and durable maintenance remain outside its runtime
 scope.
 
-## Machine-assisted and future actionability validation rules
+## Machine-assisted and actionability validation rules
 
 Cross-project evidence from PhoenixQA establishes a useful authority boundary for
 future TestRepairEngine slices:
@@ -279,11 +343,15 @@ LLM proposal
 
 Model confidence or persuasive reasoning text is not execution authority.
 
-For future timing/actionability recovery, evidence that a state *can* change
-(such as a declared CSS transition or animation) must not automatically be
+Sprint 7 validated that an actionability failure must not be reinterpreted as
+locator drift merely because Playwright reports a timeout. A uniquely resolving
+original test-id blocks locator substitution.
+
+Generic timing/actionability healing remains future work. If such recovery is
+qualified later, evidence that a state *can* change must not automatically be
 treated as evidence that the relevant state *is changing toward recovery*.
-Observed temporal change is stronger evidence. The exact observation policy
-remains future work and must be validated in TestRepairEngine before adoption.
+Observed temporal change is stronger evidence. Any observation/recovery policy
+requires its own qualification and acceptance.
 
 ### Sprint 2 machine-assisted contract rules
 
@@ -510,7 +578,7 @@ Still deferred beyond the currently validated slices:
 - general LLM robustness across diverse ambiguity shapes and independently
   evolved dynamic frontends,
 - general locator healing beyond the current logical `TEST_ID` slice,
-- timing/actionability repair,
+- generic timing/actionability healing beyond the current classification safety boundary and native Playwright behavior,
 - broad pytest-xdist/concurrency guarantees beyond the bounded two-worker S5.1
   qualification,
 - enterprise application coverage,

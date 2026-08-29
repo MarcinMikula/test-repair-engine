@@ -56,6 +56,38 @@ Evidence plan
 Prefer an existing seam to a new one. Do not create an abstraction merely to make
 a test easier.
 
+### Qualification gate before implementation
+
+For a suspected capability gap, safety boundary or recovery family,
+qualification comes before product implementation.
+
+Qualification means:
+
+```text
+define failure class
+-> define risk
+-> identify the real seam
+-> define an independent oracle
+-> freeze the relevant product/target boundary
+-> exercise the failure without the proposed correction
+-> classify ownership and competent authority tier
+-> decide whether a real gap exists
+```
+
+Qualification is **not** implementation.
+
+A valid qualification may conclude that behavior is already correct, native
+Playwright is sufficient, the current tier safely abstains, evidence is
+inconclusive, the gap belongs elsewhere, or a planned implementation is
+`NOT REQUIRED`.
+
+Stop before implementation when the observed failure is wrong, the oracle is
+unclear, evidence conflicts, the required tier is unsupported, or the proposed
+change crosses ecosystem ownership without evidence.
+
+Only after a gap is qualified should a product/integration correction enter the
+RED loop below.
+
 ## 2. Diagnose material bugs with a RED loop
 
 Use:
@@ -73,6 +105,8 @@ reproduce
 ```
 
 ### Reproduce
+
+For a new capability/safety gap, enter this RED loop only after qualification has established that correction is required.
 
 Build the tightest practical feedback loop that detects the exact reported
 symptom. Prefer, in order:
