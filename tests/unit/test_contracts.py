@@ -260,3 +260,48 @@ def test_recovered_record_requires_consistent_repair_evidence() -> None:
             runtime_result=RepairOutcome.RECOVERED,
             llm_evidence=_not_called_evidence(),
         )
+
+
+def test_role_link_locator_kind_is_explicitly_bounded() -> None:
+    assert LocatorKind("role_link") is LocatorKind.ROLE_LINK
+
+    with pytest.raises(ValueError):
+        LocatorKind("role")
+
+
+def test_role_link_repair_request_accepts_click() -> None:
+    request = RepairRequest(
+        action=RepairAction.CLICK,
+        locator_kind="role_link",
+        original_locator="Belt Sander Belt Sander $73.59",
+    )
+
+    assert request.locator_kind is LocatorKind.ROLE_LINK
+    assert request.action is RepairAction.CLICK
+
+
+def test_role_link_repair_request_rejects_fill() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="ROLE_LINK locator only supports click",
+    ):
+        RepairRequest(
+            action=RepairAction.FILL,
+            locator_kind="role_link",
+            original_locator="search input",
+        )
+
+
+def test_role_link_repair_record_rejects_fill() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="ROLE_LINK locator only supports click",
+    ):
+        RepairRecord(
+            run_id="run-role-link-contract",
+            action=RepairAction.FILL,
+            locator_kind="role_link",
+            original_locator="search input",
+            runtime_result=RepairOutcome.FAILED,
+            llm_evidence=_not_called_evidence(),
+        )

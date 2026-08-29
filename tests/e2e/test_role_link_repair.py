@@ -37,7 +37,7 @@ def clean_runtime() -> None:
 
 
 def _role_locator_kind() -> LocatorKind:
-    return LocatorKind("role")
+    return LocatorKind("role_link")
 
 
 def _recover_role_link_click(
@@ -72,7 +72,7 @@ def _finalized_record(tmp_path: Path, node_id: str):
 
 
 def test_role_locator_kind_contract_is_available() -> None:
-    assert _role_locator_kind() is LocatorKind.ROLE
+    assert _role_locator_kind() is LocatorKind.ROLE_LINK
 
 
 def test_role_link_repair_recovers_unique_insertion_expansion(
