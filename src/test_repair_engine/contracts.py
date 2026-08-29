@@ -36,6 +36,7 @@ class LocatorKind(StrEnum):
     """Locator families currently understood by TestRepairEngine."""
 
     TEST_ID = "test_id"
+    ROLE = "role"
 
 
 class RepairMethod(StrEnum):
