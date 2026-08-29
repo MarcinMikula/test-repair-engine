@@ -324,3 +324,84 @@ def test_role_link_repair_fails_closed_when_original_exact_name_still_resolves(
     assert record.runtime_result is RepairOutcome.FAILED
     assert record.replacement_locator is None
     assert record.candidate_count == 0
+
+
+@pytest.mark.parametrize(
+    ("candidate_name", "case_id"),
+    [
+        (
+            "Belt Sander Compare Belt Sander CO2 A B C D E $74.59",
+            "wrong_price",
+        ),
+        (
+            "Special Belt Sander Compare Belt Sander $73.59",
+            "prefix_insertion",
+        ),
+        (
+            "Belt Sander Compare Belt Sander $73.59 Sale",
+            "suffix_insertion",
+        ),
+        (
+            "Belt Sander $73.59",
+            "deletion",
+        ),
+        (
+            "Belt Sander $73.59 Compare Belt Sander",
+            "reorder",
+        ),
+        (
+            "Mega Belt Sander Compare Belt Sander $73.59",
+            "near_collision_prefix",
+        ),
+    ],
+)
+def test_role_link_repair_rejects_out_of_authority_name_changes(
+    tmp_path: Path,
+    candidate_name: str,
+    case_id: str,
+) -> None:
+    node_id = (
+        "tests/e2e/test_role_link_repair.py::"
+        f"test_role_link_repair_rejects_out_of_authority_name_changes[{case_id}]"
+    )
+    configure_runtime(enabled=True, output_dir=tmp_path)
+    set_current_test_node(node_id)
+
+    html = f"""
+    <main>
+      <a href="#candidate" aria-label="{candidate_name}">
+        candidate
+      </a>
+    </main>
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_content(html)
+        retried: list[object] = []
+
+        assert (
+            page.get_by_role(
+                "link",
+                name=ORIGINAL_NAME,
+                exact=True,
+            ).count()
+            == 0
+        )
+
+        recovered = _recover_role_link_click(
+            page,
+            original_accessible_name=ORIGINAL_NAME,
+            retry=retried.append,
+        )
+
+        assert recovered is False
+        assert retried == []
+        browser.close()
+
+    record = _finalized_record(tmp_path, node_id)
+    assert record.locator_kind is _role_locator_kind()
+    assert record.runtime_result is RepairOutcome.FAILED
+    assert record.replacement_locator is None
+    assert record.candidate_count == 0
