@@ -811,6 +811,54 @@ triggered by a real failure that the current lower tiers cannot solve safely.
 
 ---
 
+## Sprint 4.1 / 4.2 - logical TEST_ID is not the same as one physical attribute
+
+**Review date:** 2026-08-22
+
+**Status:** Closed - externally qualified Toolshop gap corrected and retested.
+
+Live Toolshop evidence proved that Playwright `TEST_ID` semantics and the
+physical DOM attribute are separate concerns. Playwright was configured for
+`data-test`, normal `get_by_test_id()` worked, but TRE scanned only
+`[data-testid]`.
+
+S4.1 kept product behavior frozen and isolated the gap before correction:
+
+```text
+Playwright TEST_ID using data-test
+-> target visible
+
+TRE production collector
+-> zero candidates
+
+qualification-only data-test collector
+-> real replacements visible
+
+unchanged deterministic ranker
+-> account-name -> account_name
+-> account-number -> account_number
+```
+
+Decision:
+
+```text
+logical TEST_ID
++
+physical attribute
+   default: data-testid
+   explicit override: e.g. data-test
+```
+
+Candidate lookup and value extraction must use the same supplied physical
+attribute. `TRE-FIND-002` then closed through a small adapter correction and live
+post-fix Toolshop acceptance with zero LLM calls.
+
+Durable lesson: do not hard-code one physical framework representation beneath a
+logical locator abstraction when the framework explicitly allows that
+representation to be configured.
+
+---
+
 ## Sprint 5.1 - prove process identity directly before claiming process-safe correlation
 
 **Review date:** 2026-08-24
@@ -929,7 +977,8 @@ result leakage occurred.
 
 2. **A harness defect does not justify a product finding.**
    Attempt 1 exposed an invalid acceptance assumption. Product code remained
-   frozen while the oracle was corrected. No `TRE-FIND-003` was opened.
+   frozen while the oracle was corrected. No product finding was opened for
+   S5.1.
 
 3. **Runtime recovery and original-test success remain separate across the tested
    process boundary.**
@@ -963,3 +1012,144 @@ The validated claim is deliberately narrow:
 
 Future concurrency work should begin from a new evidence gap rather than
 expanding the claim from this single bounded qualification.
+
+---
+
+## Sprint 6 - exception type is not enough to define repair eligibility
+
+**Review date:** 2026-08-26
+
+**Status:** Closed - `TRE-FIND-003` corrected at the framework handoff.
+
+The framework delegated only `PlaywrightTimeoutError`, while a real strict-mode
+multiple-match raised non-timeout `PlaywrightError`. Catching every Playwright
+error would have widened repair authority beyond the evidence.
+
+Sprint 6 qualified two boundaries before implementation:
+
+```text
+S6.1
+normal framework seam reaches TRE?
+-> NO for strict mode
+
+S6.2
+unchanged TRE core safe after explicit handoff?
+-> duplicates only: fail closed
+-> duplicates + distinct replacement: deterministic recovery
+```
+
+Decision:
+
+```text
+qualified strict-mode violation
++
+original test-id count > 1
+-> bounded TRE handoff may run
+
+generic non-timeout Playwright error
+-> no handoff
+```
+
+Duplicate identity alone never authorizes arbitrary `.first()`, `.last()`,
+`.nth()` or forced interaction.
+
+Durable ownership rule:
+
+```text
+framework
+-> normal execution and repair-eligibility classification
+
+TRE
+-> bounded replacement authority after qualified handoff
+```
+
+A real failure can therefore expose an ecosystem-seam defect without implying a
+core engine defect.
+
+---
+
+## Sprint 7 - a timeout is a symptom, not a locator-drift diagnosis
+
+**Review date:** 2026-08-29
+
+**Status:** Closed - `TRE-FIND-004` corrected at framework and TRE boundaries and
+verified through merged main.
+
+A locator may still resolve exactly once while the element is disabled,
+readonly, hidden, pointer-intercepted or otherwise non-actionable. Playwright may
+surface the final failure as `TimeoutError`, but that is not locator drift.
+
+Three pre-fix evidence levels reproduced the risk before implementation:
+
+```text
+S7.1 controlled browser matrix
+-> CLICK + FILL redirection
+
+S7.2 frozen PhoenixQA
+-> CLICK + FILL redirection
+
+S7.3 live Toolshop
+-> CLICK redirection through a real business flow
+```
+
+This established the durable meaning of qualification for TRE:
+
+> Qualification defines and verifies failure class, risk, seam, oracle,
+> ownership and authority before product implementation. Qualification is not
+> implementation.
+
+A qualification may conclude that behavior is already correct, native Playwright
+is sufficient, the current tier safely abstains, evidence is inconclusive, or a
+planned implementation is `NOT REQUIRED`.
+
+Primary framework correction:
+
+```text
+TimeoutError + original count == 0
+-> locator-drift handoff may enter TRE
+
+TimeoutError + original count == 1
+-> preserve original Playwright failure
+```
+
+Defense in depth inside TRE:
+
+```text
+exact original count == 1
+-> no substitution
+-> fail closed
+
+exact original-count probe failure
+-> fail closed
+
+count == 0
+-> existing drift recovery may continue
+
+count > 1
+-> separately qualified strict-mode path may continue
+```
+
+The first TRE guard relied on the bounded candidate list. Review exposed that the
+unique original could sit beyond the 50-candidate bound or disappear after a
+candidate metadata probe error. The final guard therefore uses an exact unbounded
+browser-side original-count probe independent of candidate collection.
+
+Durable lessons:
+
+1. Exception type is evidence, not diagnosis.
+2. Zero, one and multiple original matches have different repair semantics.
+3. Actionability failure is not locator drift.
+4. Framework classification is primary; TRE exact-count verification is defense
+   in depth.
+5. Candidate-performance bounds must not weaken safety invariants.
+6. Native Playwright remains first authority.
+7. Controlled, frozen real-app and live external evidence are stronger than one
+   green demo.
+8. Merged-main validation closes integration risk after both corrections land.
+
+Post-fix S7.1/S7.2/S7.3 blocked the redirection while preserving genuine
+zero-match drift and strict-mode recovery. Final merged-main
+`run-20260828T171602Z` verified the exact merged revisions together.
+
+Sprint 7 closes a safety boundary. It does not implement generic actionability
+healing.

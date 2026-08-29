@@ -8,10 +8,25 @@ boundaries.
 
 ## Boundary 1 — framework to TestRepairEngine
 
-The framework owns normal test execution.
+The framework owns normal test execution and classification of whether a failed
+interaction is eligible to enter locator repair.
 
 A generic mechanical interaction helper may call TestRepairEngine only after a
-repairable Playwright interaction fails.
+qualified Playwright interaction failure.
+
+```text
+TimeoutError + original test-id count == 0
+-> locator-drift handoff may enter TRE
+
+TimeoutError + original test-id count == 1
+-> preserve original Playwright failure
+
+qualified strict-mode violation + original test-id count > 1
+-> bounded TRE handoff may run
+
+generic non-timeout Playwright error or failed count confirmation
+-> fail closed
+```
 
 The current relevant handoff is equivalent to:
 
@@ -19,6 +34,7 @@ The current relevant handoff is equivalent to:
 action
 locator kind = test_id
 original test ID
+physical Playwright test-id attribute
 Page Object class when available
 mechanical helper method when available
 optional project/context traceability
@@ -27,18 +43,32 @@ optional project/context traceability
 The runtime callback used to retry a fill may close over the input value, but the
 value is not inspected or persisted by TestRepairEngine.
 
-If TestRepairEngine is not installed, not enabled, cannot find a safe candidate,
-or cannot recover the retry, the original Playwright failure remains
-controlling.
+If TestRepairEngine is not installed or enabled, the framework classifier does
+not authorize handoff, TRE cannot verify the original-target safety boundary,
+no safe candidate exists, or the retry cannot be recovered, the original
+Playwright failure remains controlling.
 
 ## Boundary 2 — runtime recovery
 
-The current runtime still repairs one narrow `data-testid` drift interaction at
-a time, but Sprint 2 adds one bounded ambiguity escalation path.
+The runtime repairs one narrow logical `TEST_ID` interaction at a time.
+`data-testid` is the default physical attribute; callers may supply the physical
+test-id attribute configured in Playwright.
+
+Before substitution TRE independently verifies the original:
 
 ```text
-old data-testid
--> bounded current candidates
+exact original count == 1 or exact probe failure
+-> fail closed
+
+exact original count == 0 or > 1
+-> bounded recovery evaluation may continue
+```
+
+Candidate selection then proceeds:
+
+```text
+original logical test ID
+-> bounded current candidates from the active physical test-id attribute
 -> structural action filter
 -> deterministic ranking
 
@@ -186,6 +216,22 @@ assertions to obtain PASS.
 This validates the supported integration for the current bounded capability. It
 does not transfer durable-maintenance authority from TestCartographer to
 TestRepairEngine.
+
+Sprint 6 validated a narrow strict-mode multiple-match handoff without widening
+generic Playwright-error delegation. Sprint 7 then proved and closed a false-pass
+risk in broad timeout delegation.
+
+```text
+framework
+-> unique-match actionability timeout does not enter locator repair
+
+TRE
+-> exact original count == 1 blocks substitution independently
+```
+
+Post-fix evidence covered controlled browser cases, frozen PhoenixQA, live
+Toolshop and a final merged-main cross-repository gate. Genuine zero-match drift
+and the separately qualified strict-mode path remained available.
 
 ## Durable maintenance
 

@@ -14,44 +14,57 @@ rewriter, or general maintenance platform.
 pytest / Playwright test
         |
         v
-technical interaction fails
+normal Playwright interaction
         |
-        v
-framework interaction hook
+        +-- success -> original test continues
         |
-        v
-TestRepairEngine
-        |
-        +-- collect bounded structural candidates
-        +-- filter by action compatibility
-        +-- rank deterministically
-        |
-        +-- unique winner --------------------+
-        |                                     |
-        +-- bounded ambiguity                  |
-        |      |                               |
-        |      +-- LLM disabled -> fail closed |
-        |      |                               |
-        |      `-- one Ollama proposal         |
-        |             -> local validation      |
-        |             -> validated selection -+
-        |
-        `-- weak / too broad -> fail closed
-                                              |
-                                              v
-                                    one browser retry
-                                              |
-                                              v
-                                    original test continues
-                                              |
-                                              v
-                                    original assertions execute
-                                              |
-                                              v
-                                    pytest finalizes RepairRecord
+        `-- failure
+              |
+              v
+       framework eligibility classifier
+              |
+              +-- TimeoutError + original count == 0 --------+
+              +-- qualified strict mode + count > 1 ---------+
+              +-- original count == 1 -> original failure    |
+              `-- generic/unconfirmed -> original failure    |
+                                                           v
+                                                  TestRepairEngine
+                                                           |
+                                            exact original-count probe
+                                                           |
+                 +------------------+-----------------------+----------------+
+                 |                  |                                        |
+            count == 1         probe failure                           count 0 or >1
+            fail closed         fail closed                                  |
+                                                                             v
+                                                           bounded candidate collection
+                                                                             |
+                                                           action compatibility + ranking
+                                                                             |
+                       +-------------------+-------------------+---------------+
+                       |                   |                   |
+                  unique winner      bounded ambiguity      weak / broad
+                       |                   |                   |
+                       |             optional one-call       fail closed
+                       |             Ollama proposal
+                       |             + local validation
+                       +-------------------+
+                                 |
+                                 v
+                          one browser retry
+                                 |
+                                 v
+                       unchanged test continues
+                                 |
+                                 v
+                     original assertions execute
+                                 |
+                                 v
+                    pytest finalizes RepairRecord
 ```
 
-The complete original test result remains authoritative.
+The complete original test result remains authoritative. Framework eligibility
+and TRE substitution authority are separate safety boundaries.
 
 ## Ecosystem ownership
 
@@ -72,37 +85,43 @@ These responsibilities remain separate.
 
 Concrete Page Objects must not know that TestRepairEngine exists.
 
-The intended integration point is the small reusable mechanical interaction
-layer:
+Normal Playwright execution always runs first. The reusable mechanical helper
+then decides whether the observed failure is eligible for locator repair.
 
 ```text
-Concrete Page Object
-        |
-        v
-BasePage / reusable interaction helper
-        |
-        v
-normal Playwright interaction
-        |
-        +-- success -> continue normally
-        |
-        `-- timeout -> optional TestRepairEngine hook
-                         |
-                         +-- disabled/unavailable -> re-raise original failure
-                         `-- recovered -> continue original test
+TimeoutError + original test-id count == 0
+-> optional TRE locator-drift handoff
+
+TimeoutError + original test-id count == 1
+-> locator still resolves uniquely
+-> preserve original failure
+
+qualified strict-mode violation + original test-id count > 1
+-> optional TRE handoff
+
+generic non-timeout Playwright error
+-> no TRE handoff
+
+failed count confirmation
+-> fail closed
 ```
 
-The normal Playwright operation always runs first. Runtime repair is therefore
-not on the successful-path dependency chain.
+The framework owns this classifier because it owns normal Playwright execution.
+Runtime repair remains outside the successful-path dependency chain.
 
 ## Sprint 1 deterministic candidate model
 
 Sprint 1 handles `LocatorKind.TEST_ID` only.
 
-Candidate collection persists no raw page payload. For each bounded candidate,
-the adapter uses only structural runtime facts needed for selection:
+Candidate collection persists no raw page payload. `LocatorKind.TEST_ID` is a
+logical locator kind. `data-testid` is the default physical attribute, while the
+adapter may receive another explicitly configured Playwright test-id attribute
+such as `data-test`.
 
-- `data-testid`,
+For each bounded candidate, the adapter uses only structural runtime facts needed
+for selection:
+
+- the value of the active physical test-id attribute,
 - tag name,
 - explicit ARIA role when present,
 - visibility,
@@ -180,6 +199,31 @@ eligible ambiguity.
 Once a real LLM call occurs, `selected_score` is not recorded as though a
 deterministic score explained the model's decision.
 
+## Original-target safety invariant
+
+Before candidate collection can authorize substitution, TRE performs an exact
+browser-side count of elements whose active physical test-id attribute equals
+the original logical test ID.
+
+```text
+exact original count == 1
+-> no substitution
+-> fail closed
+
+exact probe raises PlaywrightError
+-> fail closed
+
+exact original count == 0
+-> locator-drift recovery may continue
+
+exact original count > 1
+-> separately qualified strict-mode recovery may continue
+```
+
+This exact probe is independent of the bounded candidate collector. Candidate
+performance limits must not hide a unique original element from a safety
+decision.
+
 ## Retry boundary
 
 The current runtime performs at most one retry of the failed interaction with an
@@ -248,28 +292,34 @@ repository resnapshot, review, or a source update.
 
 ## Current validated boundary
 
-Implemented in TestRepairEngine:
+Implemented and validated in TRE / its supported framework seam:
 
 - strict locator-repair contracts,
-- deterministic logical `TEST_ID` ranking with `data-testid` as the default and explicit custom physical test-id attribute support,
-- bounded Playwright candidate collection,
+- deterministic logical `TEST_ID` ranking,
+- default `data-testid` plus explicit custom test-id attribute support,
+- bounded candidate collection,
+- exact unbounded original-count protection before substitution,
 - explicit bounded-ambiguity classification,
-- optional one-call Ollama proposal only for 2–3 candidate ambiguity,
-- strict local provider-response and execution-allowlist validation,
+- optional one-call Ollama only for 2-3 candidate ambiguity,
+- strict provider-response and local allowlist validation,
 - one-retry recovery,
-- auditable LLM runtime evidence in RepairRecord v0.2,
-- runtime RepairRecord registration,
-- pytest final-result correlation,
-- collision-safe JSON persistence,
-- unit and controlled real-browser tests,
-- unchanged `qa-automation-framework` acceptance.
+- auditable RepairRecord v0.2 evidence,
+- pytest final-result correlation and collision-safe persistence,
+- bounded two-worker pytest-xdist qualification,
+- zero-match timeout locator-drift framework eligibility,
+- qualified strict-mode multiple-match framework eligibility,
+- framework rejection of unique-match actionability timeouts,
+- TRE defense-in-depth rejection of substitution when the original still
+  resolves exactly once,
+- controlled, frozen real-app, live external and merged-main validation.
 
 Still outside the current boundary:
 
 - non-test-id locator families,
-- timing/actionability repair taxonomy,
+- generic timing/actionability healing,
 - source-code patching,
 - TestCartographer compatibility interpretation,
 - API/SOM repair,
-- general pytest-xdist/concurrency guarantees beyond the bounded two-worker S5.1 qualification,
-- general LLM robustness across independently evolved dynamic frontends.
+- broad pytest-xdist/concurrency guarantees beyond S5.1,
+- general LLM robustness across independently evolved dynamic frontends,
+- automatic human-review execution workflow.
