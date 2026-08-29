@@ -2,7 +2,8 @@
 
 ## Status
 
-**OPEN - evidence-qualified cross-layer safety gap.**
+**CLOSED - corrected and independently verified across controlled, real-app,
+external and merged-main acceptance.**
 
 ## Discovery context
 
@@ -508,25 +509,219 @@ Out of scope:
 14. closure records exact correction commits, PRs, CI and authoritative post-fix
     run IDs.
 
-## Current state
+## Closure
 
-**OPEN.**
+`TRE-FIND-004` is closed.
 
-Qualification is complete. Product implementation has not started.
+The correction preserved the original evidence and introduced two independent
+safety boundaries.
 
-Next sequence:
+### Framework authorization correction
+
+The framework no longer treats every Playwright `TimeoutError` as locator drift.
 
 ~~~text
-preserve TRE-FIND-004
--> merge finding evidence
--> framework RED
--> TRE defense-in-depth RED
--> smallest corrections
--> regression
--> S7.1 post-fix
--> S7.2 post-fix
--> S7.3 external post-fix
--> close TRE-FIND-004
+RED:
+54f1317909222f1e50f92fe4a44579cd72e306fd
+
+correction:
+ee203af4505e4710d568df96f23e880342a06eae
+
+PR:
+qa-automation-framework #3
+fix: restrict timeout repair to missing test ids
+
+merged main:
+d5590f1eda9934db125fc509f17498d1acc14027
+
+PR CI:
+QA Framework Tests #54
+success
+
+post-merge main CI:
+QA Framework Tests #55
+success
 ~~~
+
+The merged rule is bounded:
+
+~~~text
+TimeoutError + original test-id count == 0
+-> locator-drift handoff remains eligible
+
+TimeoutError + original test-id count == 1
+-> original locator still resolves uniquely
+-> no TRE locator-repair handoff
+
+qualified strict-mode violation + count > 1
+-> existing strict-mode recovery remains eligible
+
+count confirmation failure
+-> fail closed
+~~~
+
+### TestRepairEngine defense in depth
+
+TRE now performs an exact, unbounded original test-id match-count probe before
+candidate substitution. This probe is independent of the bounded candidate
+collector.
+
+Committed lineage:
+
+~~~text
+initial RED:
+b2eaaa7dc783b20fa13db32974c6ef46cfb94964
+
+initial correction:
+fd9850240ab41916ad31d2d49faf04e7ac3e677b
+
+follow-up RED exposing bounded-collector weakness:
+40f63766037d786292265b6b7ee15b3f9d0012e6
+
+final exact-probe correction:
+7114aeb6e7239b6911700c96900f5e17812cc081
+
+PR:
+TestRepairEngine #16
+fix: prevent actionability redirection from locator repair
+
+merged main:
+694c2f06a38cd7bf70644a35d225d73b63229873
+
+PR CI:
+tests #40
+success
+
+post-merge main CI:
+tests #41
+success
+~~~
+
+The merged TRE invariant is:
+
+~~~text
+exact original count == 1
+-> no locator substitution
+-> no replacement retry
+-> fail closed
+
+exact original-count probe failure
+-> fail closed
+
+exact original count == 0
+-> existing locator-drift recovery may continue
+
+exact original count > 1
+-> existing qualified strict-mode path may continue
+~~~
+
+Candidate scoring, thresholds, ambiguity rules, retry budget, LLM authority and
+RepairRecord schema were not widened.
+
+### Post-fix acceptance
+
+The correction was verified at the same three evidence levels used to qualify the
+risk.
+
+~~~text
+S7.1 controlled browser matrix
+run-20260828T162811Z
+VERIFIED_ACTIONABILITY_REDIRECTION_BLOCKED_CLICK_AND_FILL
+
+S7.2 frozen PhoenixQA React/Vite flow
+run-20260828T163708Z
+VERIFIED_REAL_APP_ACTIONABILITY_REDIRECTION_BLOCKED_CLICK_AND_FILL
+
+S7.3 live external Toolshop flow
+run-20260828T164909Z
+VERIFIED_EXTERNAL_ACTIONABILITY_REDIRECTION_BLOCKED_CLICK
+~~~
+
+Across those runs:
+
+- genuine zero-match locator drift remained recoverable;
+- native Playwright remained first authority for transient actionability;
+- unique disabled CLICK failures were not redirected;
+- unique readonly FILL failures were not redirected;
+- the controlled Toolshop alternative submit was not interacted with;
+- business login did not falsely pass through the alternate target;
+- LLM authority remained disabled.
+
+### Merged-main closure gate
+
+After both corrections were merged, a final integration-only gate validated the
+actual merged revisions:
+
+~~~text
+run-20260828T171602Z
+VERIFIED_MERGED_MAIN_TRE_FIND_004_CLOSURE_GATE
+
+TestRepairEngine main:
+694c2f06a38cd7bf70644a35d225d73b63229873
+
+qa-automation-framework main:
+d5590f1eda9934db125fc509f17498d1acc14027
+
+real-browser cross-repo:
+5 passed
+
+framework:
+compileall PASS
+120 unit passed
+
+TestRepairEngine:
+Ruff PASS
+104 tests passed
+
+repositories:
+CLEAN / FROZEN
+~~~
+
+The five merged-main browser controls proved:
+
+~~~text
+zero-match locator drift
+-> recovery preserved
+
+unique disabled CLICK + similar candidate
+-> original Playwright failure preserved
+
+unique readonly FILL + similar candidate
+-> original Playwright failure preserved
+
+qualified strict-mode multiple-match
+-> recovery preserved
+
+unique original beyond the 50-candidate shortlist
+-> exact probe still detects it
+-> fail closed
+~~~
+
+The S7.4 cleanup phase also encountered permission-denied cleanup of an older,
+unrelated Git worktree metadata entry named
+`qa-automation-framework-sprint6`. This occurred only after authority had been
+finalized and after every product, regression, cleanliness and frozen-revision
+gate had passed. It is recorded as local Git cleanup debt and does not weaken the
+acceptance result.
+
+### Closed claim
+
+The supported claim remains deliberately narrow:
+
+> For the validated test-id CLICK/FILL repair path, locator substitution is not
+> authorized when the original test-id still resolves exactly once. The framework
+> blocks such timeouts from entering locator repair, and TestRepairEngine
+> independently fails closed if called directly. Genuine zero-match locator drift
+> and the separately qualified strict-mode multiple-match path remain available.
+
+Historical qualification, review-only and inconclusive runs remain immutable.
+
+## Current state
+
+**CLOSED.**
+
+`TRE-FIND-004` satisfied its acceptance basis through committed RED evidence,
+small bounded corrections, three-level post-fix acceptance, merged PR/CI
+verification and the authoritative S7.4 merged-main closure gate.
 
 No GitHub Issue is required merely to duplicate this durable repository finding.
