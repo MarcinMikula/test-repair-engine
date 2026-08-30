@@ -15,6 +15,8 @@ A generic mechanical interaction helper may call TestRepairEngine only after a
 qualified Playwright interaction failure.
 
 ```text
+TEST_ID
+
 TimeoutError + original test-id count == 0
 -> locator-drift handoff may enter TRE
 
@@ -26,18 +28,35 @@ qualified strict-mode violation + original test-id count > 1
 
 generic non-timeout Playwright error or failed count confirmation
 -> fail closed
+
+
+ROLE_LINK + CLICK
+
+TimeoutError + original exact role-link accessible-name count == 0
+-> semantic-locator handoff may enter TRE
+
+exact count >= 1, generic non-timeout error, or failed count confirmation
+-> preserve original Playwright failure
 ```
 
-The current relevant handoff is equivalent to:
+The current relevant handoff has two qualified shapes:
 
 ```text
-action
-locator kind = test_id
-original test ID
-physical Playwright test-id attribute
-Page Object class when available
-mechanical helper method when available
-optional project/context traceability
+TEST_ID
+-> action = click or fill
+-> locator kind = test_id
+-> original test ID
+-> physical Playwright test-id attribute
+
+ROLE_LINK
+-> action = click only
+-> locator kind = role_link
+-> original exact accessible name
+
+both
+-> Page Object class when available
+-> mechanical helper method when available
+-> optional project/context traceability
 ```
 
 The runtime callback used to retry a fill may close over the input value, but the
@@ -50,9 +69,12 @@ Playwright failure remains controlling.
 
 ## Boundary 2 — runtime recovery
 
-The runtime repairs one narrow logical `TEST_ID` interaction at a time.
-`data-testid` is the default physical attribute; callers may supply the physical
-test-id attribute configured in Playwright.
+The runtime repairs one qualified interaction at a time. Current locator
+authority consists of logical `TEST_ID` for click/fill plus the separately
+qualified `ROLE_LINK` + `CLICK` semantic slice.
+
+For `TEST_ID`, `data-testid` is the default physical attribute; callers may
+supply the physical test-id attribute configured in Playwright.
 
 Before substitution TRE independently verifies the original:
 
@@ -85,6 +107,20 @@ weak / too broad / invalid model result
 -> original Playwright failure remains controlling
 ```
 
+
+The separate ROLE_LINK path does not use TEST_ID similarity ranking or the LLM
+fallback:
+
+```text
+original exact role-link accessible-name count == 0
+-> anchored token-preserving insertion regex
+-> exactly one visible + enabled candidate
+-> one click retry
+
+zero / multiple / non-actionable / still-exact / probe uncertainty
+-> no retry
+-> original Playwright failure remains controlling
+```
 A recovered interaction allows the same test invocation to continue.
 TestRepairEngine does not own business correctness. The LLM also does not own
 execution authority; the deterministic runtime boundary does.
@@ -232,6 +268,11 @@ TRE
 Post-fix evidence covered controlled browser cases, frozen PhoenixQA, live
 Toolshop and a final merged-main cross-repository gate. Genuine zero-match drift
 and the separately qualified strict-mode path remained available.
+
+Sprint 8 then qualified and integrated `ROLE_LINK` + `CLICK` through the normal
+framework seam. The final both-merged-main closure
+`run-20260829T181800Z` preserved the unchanged original test as the final oracle,
+used deterministic semantic authority only, and made no LLM call.
 
 ## Durable maintenance
 

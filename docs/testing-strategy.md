@@ -33,6 +33,7 @@ Fast deterministic tests cover:
 - ambiguity abstention,
 - Playwright adapter orchestration with bounded fakes,
 - exact original test-id count fail-closed protection,
+- `ROLE_LINK` + `CLICK` authority and token-preserving semantic matching,
 - runtime repair registration,
 - final test-outcome correlation,
 - RepairRecord persistence and collision-safe immutability.
@@ -227,6 +228,52 @@ unique non-actionable original
 This validates actionability classification safety, not generic actionability
 healing.
 
+## Sprint 8 semantic ROLE_LINK qualification
+
+Sprint 8 qualified one semantic locator family separately from the TEST_ID
+ranking and LLM path.
+
+The safety and recovery oracle is:
+
+```text
+ROLE_LINK + CLICK
+
+original exact accessible-name count == 0
++ all original alphanumeric tokens retained in order
++ insertion only between original tokens
++ exactly one matching link
++ candidate visible + enabled
+-> one deterministic click retry may run
+-> unchanged original test continues
+
+zero candidates
+multiple candidates
+non-actionable unique candidate
+original exact accessible name still resolves
+deleted / reordered tokens
+prefix/suffix-only insertion
+probe or retry uncertainty
+-> fail closed
+```
+
+The path does not use Ollama. Qualification used live Toolshop version evidence,
+then controlled TRE and framework RED/GREEN coverage, and finally the supported
+cross-repository seam.
+
+Authoritative both-merged-main closure:
+
+```text
+run-20260829T181800Z
+
+TestRepairEngine full regression  -> 120 passed / Ruff PASS
+qa-automation-framework full      -> 166 passed
+framework ROLE_LINK focus         -> 7 passed
+cross-repository positive control -> PASS
+```
+
+This validates only the bounded `ROLE_LINK` + `CLICK` insertion-expansion
+authority. It does not establish generic role healing, button healing, fuzzy
+accessible-name recovery, fill-by-role recovery, or LLM semantic selection.
 ## STLC alignment
 
 Each runtime repair slice follows:

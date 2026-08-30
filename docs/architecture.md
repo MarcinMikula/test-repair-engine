@@ -89,6 +89,8 @@ Normal Playwright execution always runs first. The reusable mechanical helper
 then decides whether the observed failure is eligible for locator repair.
 
 ```text
+TEST_ID
+
 TimeoutError + original test-id count == 0
 -> optional TRE locator-drift handoff
 
@@ -104,6 +106,18 @@ generic non-timeout Playwright error
 
 failed count confirmation
 -> fail closed
+
+
+ROLE_LINK + CLICK
+
+TimeoutError + original exact role-link accessible-name count == 0
+-> optional TRE semantic-locator handoff
+
+TimeoutError + original exact role-link accessible-name count >= 1
+-> preserve original failure
+
+generic non-timeout Playwright error or failed count confirmation
+-> preserve original failure
 ```
 
 The framework owns this classifier because it owns normal Playwright execution.
@@ -224,11 +238,43 @@ This exact probe is independent of the bounded candidate collector. Candidate
 performance limits must not hide a unique original element from a safety
 decision.
 
+## Sprint 8 semantic ROLE_LINK boundary
+
+Sprint 8 adds one separately qualified semantic locator slice without widening
+the generic TEST_ID candidate model.
+
+```text
+locator kind = ROLE_LINK
+action = CLICK only
+
+original exact accessible-name count == 0
+-> tokenize the original accessible name
+-> preserve every alphanumeric token, including duplicates, in order
+-> anchor the generated regex at start and end
+-> allow inserted content only between original tokens
+-> require exactly one matching candidate
+-> require the candidate visible + enabled
+-> retry one click
+-> unchanged original test continues
+
+zero candidates
+multiple candidates
+non-actionable unique candidate
+original exact accessible name still resolves
+probe / execution uncertainty
+-> fail closed
+```
+
+This path is deterministic only. It does not use the TEST_ID similarity ranking
+or bounded Ollama fallback, and it does not authorize arbitrary roles, buttons,
+fill actions, token deletion/reordering, prefix/suffix-only insertion, or broad
+fuzzy accessible-name matching.
 ## Retry boundary
 
 The current runtime performs at most one retry of the failed interaction with an
-authorized replacement test ID, regardless of whether the replacement came from
-the deterministic layer or a validated LLM proposal.
+authorized replacement locator. TEST_ID replacement may come from the
+deterministic layer or a validated LLM proposal. ROLE_LINK replacement remains
+deterministic only.
 
 It does not:
 
@@ -311,11 +357,13 @@ Implemented and validated in TRE / its supported framework seam:
 - framework rejection of unique-match actionability timeouts,
 - TRE defense-in-depth rejection of substitution when the original still
   resolves exactly once,
+- bounded deterministic `ROLE_LINK` + `CLICK` accessible-name insertion
+  recovery with unique visible-and-enabled authority,
 - controlled, frozen real-app, live external and merged-main validation.
 
 Still outside the current boundary:
 
-- non-test-id locator families,
+- other non-test-id locator families beyond qualified `ROLE_LINK` + `CLICK`,
 - generic timing/actionability healing,
 - source-code patching,
 - TestCartographer compatibility interpretation,
