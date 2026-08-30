@@ -274,6 +274,7 @@ cross-repository positive control -> PASS
 This validates only the bounded `ROLE_LINK` + `CLICK` insertion-expansion
 authority. It does not establish generic role healing, button healing, fuzzy
 accessible-name recovery, fill-by-role recovery, or LLM semantic selection.
+
 ## STLC alignment
 
 Each runtime repair slice follows:

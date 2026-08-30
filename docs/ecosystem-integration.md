@@ -76,7 +76,7 @@ qualified `ROLE_LINK` + `CLICK` semantic slice.
 For `TEST_ID`, `data-testid` is the default physical attribute; callers may
 supply the physical test-id attribute configured in Playwright.
 
-Before substitution TRE independently verifies the original:
+For `TEST_ID`, before substitution TRE independently verifies the original:
 
 ```text
 exact original count == 1 or exact probe failure
@@ -86,7 +86,7 @@ exact original count == 0 or > 1
 -> bounded recovery evaluation may continue
 ```
 
-Candidate selection then proceeds:
+TEST_ID candidate selection then proceeds:
 
 ```text
 original logical test ID
@@ -107,7 +107,6 @@ weak / too broad / invalid model result
 -> original Playwright failure remains controlling
 ```
 
-
 The separate ROLE_LINK path does not use TEST_ID similarity ranking or the LLM
 fallback:
 
@@ -121,6 +120,7 @@ zero / multiple / non-actionable / still-exact / probe uncertainty
 -> no retry
 -> original Playwright failure remains controlling
 ```
+
 A recovered interaction allows the same test invocation to continue.
 TestRepairEngine does not own business correctness. The LLM also does not own
 execution authority; the deterministic runtime boundary does.

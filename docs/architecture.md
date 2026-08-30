@@ -23,44 +23,45 @@ normal Playwright interaction
               v
        framework eligibility classifier
               |
-              +-- TimeoutError + original count == 0 --------+
-              +-- qualified strict mode + count > 1 ---------+
-              +-- original count == 1 -> original failure    |
-              `-- generic/unconfirmed -> original failure    |
-                                                           v
-                                                  TestRepairEngine
-                                                           |
-                                            exact original-count probe
-                                                           |
-                 +------------------+-----------------------+----------------+
-                 |                  |                                        |
-            count == 1         probe failure                           count 0 or >1
-            fail closed         fail closed                                  |
-                                                                             v
-                                                           bounded candidate collection
-                                                                             |
-                                                           action compatibility + ranking
-                                                                             |
-                       +-------------------+-------------------+---------------+
-                       |                   |                   |
-                  unique winner      bounded ambiguity      weak / broad
-                       |                   |                   |
-                       |             optional one-call       fail closed
-                       |             Ollama proposal
-                       |             + local validation
-                       +-------------------+
-                                 |
-                                 v
-                          one browser retry
-                                 |
-                                 v
-                       unchanged test continues
-                                 |
-                                 v
-                     original assertions execute
-                                 |
-                                 v
-                    pytest finalizes RepairRecord
+              +-- unqualified / uncertain -> original failure
+              |
+              `-- qualified handoff
+                       |
+                       v
+                TestRepairEngine
+                       |
+             locator-specific safety gate
+                       |
+              +--------+---------+
+              |                  |
+           TEST_ID            ROLE_LINK + CLICK
+              |                  |
+     exact original-count    exact original-name
+          protection            protection
+              |                  |
+     bounded candidate      anchored token-preserving
+       collection/ranking      semantic candidate
+              |                  |
+     +--------+--------+       unique visible+enabled
+     |        |        |              |
+  winner   bounded   weak/broad       |
+           ambiguity  -> fail closed  |
+              |                       |
+        optional one-call             |
+        Ollama + local validation      |
+              +-----------+-----------+
+                          |
+                          v
+                   one browser retry
+                          |
+                          v
+                unchanged test continues
+                          |
+                          v
+              original assertions execute
+                          |
+                          v
+             pytest finalizes RepairRecord
 ```
 
 The complete original test result remains authoritative. Framework eligibility
@@ -269,6 +270,7 @@ This path is deterministic only. It does not use the TEST_ID similarity ranking
 or bounded Ollama fallback, and it does not authorize arbitrary roles, buttons,
 fill actions, token deletion/reordering, prefix/suffix-only insertion, or broad
 fuzzy accessible-name matching.
+
 ## Retry boundary
 
 The current runtime performs at most one retry of the failed interaction with an
