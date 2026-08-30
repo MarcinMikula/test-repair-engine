@@ -1153,3 +1153,73 @@ zero-match drift and strict-mode recovery. Final merged-main
 
 Sprint 7 closes a safety boundary. It does not implement generic actionability
 healing.
+
+---
+
+## Sprint 8 - semantic locator recovery must be narrower than semantic similarity
+
+**Review date:** 2026-08-30
+**Status:** Validated and closed
+
+### Problem
+
+`TEST_ID` recovery is useful because its replacement space is mechanically
+bounded. Accessible-name drift is different: a broadly similar role/name match
+can easily point at the wrong business object while still looking semantically
+plausible.
+
+The first useful semantic frontier therefore could not be "heal role locators"
+in general. It needed an observable invariant strong enough to authorize one
+specific interaction without turning fuzzy similarity into execution authority.
+
+### Evidence
+
+Live Toolshop version comparison exposed product-link accessible names where the
+original business identity remained present but additional content appeared
+inside the accessible name.
+
+Qualification separated that insertion expansion from unsupported changes such
+as:
+
+- changed price or other original token,
+- prefix-only or suffix-only additions,
+- token deletion,
+- token reordering,
+- near-collision names,
+- multiple matching links,
+- disabled unique candidates.
+
+The final cross-repository closure proved the same bounded mechanism through the
+normal framework seam and the unchanged original test.
+
+### Decision
+
+Sprint 8 authorizes only:
+
+```text
+ROLE_LINK + CLICK
+
+original exact accessible-name count == 0
+-> tokenize original accessible name
+-> preserve every alphanumeric token, including duplicates, in order
+-> anchor the generated regex at start and end
+-> allow inserted content only between original tokens
+-> require exactly one visible + enabled candidate
+-> retry once
+-> let the unchanged original test decide final success
+```
+
+The semantic path does not call the LLM. Any zero-match, multi-match,
+non-actionable, still-exact, reordered, deleted-token, prefix/suffix-only or
+otherwise out-of-authority case fails closed.
+
+### Consequence
+
+A new locator family should not be added because TRE can technically inspect it.
+It should be added only when qualification identifies a stable invariant that is
+stronger than broad text similarity and can be expressed as a small deterministic
+authority.
+
+Sprint 8 therefore does not justify generic role healing, button healing, broad
+accessible-name fuzzy matching or machine escalation. Those remain future
+frontiers that must earn their own qualification evidence.
