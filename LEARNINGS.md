@@ -1153,6 +1153,7 @@ zero-match drift and strict-mode recovery. Final merged-main
 
 Sprint 7 closes a safety boundary. It does not implement generic actionability
 healing.
+
 ---
 
 ## Sprint 8 - semantic locator recovery must be narrower than semantic similarity

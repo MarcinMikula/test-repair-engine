@@ -491,6 +491,7 @@ delegate a qualified strict-mode multiple-match failure into the existing TRE
 recovery path while generic non-timeout Playwright errors remain outside repair,
 duplicate-only ambiguity remains fail-closed, and the unchanged original test
 continues to own the final result.
+
 ---
 
 ## Sprint 8 ROLE_LINK semantic-repair qualification and closure
