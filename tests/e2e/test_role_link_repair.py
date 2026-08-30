@@ -1,4 +1,4 @@
-"""RED tests for the qualified ROLE=link + CLICK repair authority."""
+"""Regression coverage for the qualified ROLE=link + CLICK repair authority."""
 
 from __future__ import annotations
 
