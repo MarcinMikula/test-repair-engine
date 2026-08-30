@@ -15,15 +15,22 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 7 closed - locator-repair eligibility and redirection safety are now
-validated across controlled browser evidence, frozen PhoenixQA, live Toolshop,
-and the final merged-main integration.**
+**Sprint 8 closed - bounded semantic `ROLE_LINK` + `CLICK` recovery is now
+validated alongside the existing `TEST_ID` recovery boundary, including the
+final cross-repository merged-main integration.**
 
 The current runtime remains deliberately narrow. TestRepairEngine recovers
 qualified logical Playwright `TEST_ID` interaction failures: zero-match locator
 drift and the separately qualified strict-mode multiple-match path.
 `data-testid` remains the default physical attribute, with an explicitly
 supplied custom Playwright test-id attribute when required.
+
+TRE also supports one separately qualified semantic locator slice:
+`ROLE_LINK` with `CLICK` only. It applies only when the original exact accessible
+name no longer resolves, preserves every original alphanumeric token in order,
+allows inserted content only between those tokens, requires exactly one
+visible-and-enabled candidate, and fails closed otherwise. This path is
+deterministic only; it does not use the LLM fallback.
 
 The validated framework/TRE safety boundary is:
 
@@ -64,6 +71,8 @@ Current validated implementation includes:
 - final pytest result correlation,
 - bounded two-worker pytest-xdist qualification,
 - qualified strict-mode multiple-match framework handoff,
+- bounded `ROLE_LINK` + `CLICK` accessible-name insertion recovery with a unique
+  visible-and-enabled candidate and no LLM escalation,
 - fail-closed protection against actionability-to-locator redirection,
 - independent PhoenixQA, Toolshop and merged-main validation.
 
@@ -521,6 +530,32 @@ the separately qualified strict-mode path.
 Final merged-main gate:
 `run-20260828T171602Z`
 `VERIFIED_MERGED_MAIN_TRE_FIND_004_CLOSURE_GATE`.
+
+### Sprint 8 - complete
+
+Qualified and implemented one semantic locator family without generalizing TRE
+into arbitrary role/name healing.
+
+The supported authority is deliberately narrow:
+
+```text
+locator family: ROLE_LINK
+action: CLICK
+original exact accessible-name count: 0
+candidate mechanism: anchored token-preserving insertion regex
+candidate authority: exactly one visible + enabled match
+LLM: not used
+zero / multiple / non-actionable candidate: fail closed
+```
+
+The framework exposes this boundary through `click_by_role_link`. The unchanged
+original test remains the final oracle.
+
+Authoritative both-merged-main closure:
+`run-20260829T181800Z`.
+
+Post-closure hygiene changed documentation/formatting only and did not reopen the
+validated runtime authority.
 
 ### Current frontier
 

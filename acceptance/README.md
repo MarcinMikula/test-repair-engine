@@ -491,3 +491,72 @@ delegate a qualified strict-mode multiple-match failure into the existing TRE
 recovery path while generic non-timeout Playwright errors remain outside repair,
 duplicate-only ambiguity remains fail-closed, and the unchanged original test
 continues to own the final result.
+---
+
+## Sprint 8 ROLE_LINK semantic-repair qualification and closure
+
+Sprint 8 expanded the validated locator boundary only after live evidence
+justified a semantic slice that `TEST_ID` recovery could not represent safely.
+
+The qualified authority is:
+
+```text
+locator family: ROLE_LINK
+action: CLICK only
+
+original exact accessible-name count == 0
+-> build an anchored regex from all original alphanumeric tokens
+-> retain every token, including duplicates, in original order
+-> permit inserted content only between original tokens
+-> require exactly one candidate
+-> require candidate visible + enabled
+-> retry one click
+-> unchanged original test continues
+
+zero candidates
+multiple candidates
+non-actionable unique candidate
+original exact accessible name still resolves
+probe / execution uncertainty
+-> fail closed
+```
+
+The ROLE_LINK path is deterministic only. Sprint 8 did not authorize LLM use for
+semantic locator repair and did not generalize authority to arbitrary roles,
+buttons, fill actions, deletions, reorderings, prefix/suffix insertions, or broad
+fuzzy accessible-name matching.
+
+The final authoritative both-merged-main closure run is:
+
+```text
+run-20260829T181800Z
+```
+
+That run verified:
+
+```text
+TestRepairEngine full regression  -> 120 passed / Ruff PASS
+qa-automation-framework full      -> 166 passed
+framework ROLE_LINK focus         -> 7 passed
+cross-repository positive control -> PASS
+product changes during closure    -> NONE
+```
+
+No Sprint 8 finding was opened merely to mirror the new capability. The feature
+was qualified, implemented through controlled RED -> GREEN history, validated
+across both repositories, and then closed.
+
+Post-closure hygiene was deliberately separate:
+
+```text
+framework PR #5
+-> HYGIENE-01 / HYGIENE-02
+-> wording + formatting only
+
+TestRepairEngine PR #20
+-> HYGIENE-03
+-> wording only
+```
+
+Those hygiene changes did not alter the validated runtime behavior or reopen the
+Sprint 8 acceptance claim.
