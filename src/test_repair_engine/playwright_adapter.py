@@ -7,7 +7,7 @@ from collections.abc import Callable
 from time import perf_counter_ns
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page
+from playwright.sync_api import Frame, FrameLocator, Locator, Page
 
 from test_repair_engine.candidate_finder import (
     CandidateSelectionStatus,
@@ -39,6 +39,8 @@ from test_repair_engine.runtime import (
     register_repair,
     repair_enabled,
 )
+
+PlaywrightInteractionScope = Page | Frame | FrameLocator
 
 _DEFAULT_TEST_ID_ATTRIBUTE = "data-testid"
 _MAX_TEST_ID_CANDIDATES = 50
@@ -118,7 +120,7 @@ def _collect_test_id_candidates_from_locator(
 
 
 def recover_test_id_action(
-    page: Page,
+    page: PlaywrightInteractionScope,
     *,
     action: RepairAction,
     original_test_id: str,
@@ -319,7 +321,7 @@ def _role_link_insertion_pattern(original_accessible_name: str) -> re.Pattern[st
 
 
 def recover_role_link_click(
-    page: Page,
+    page: PlaywrightInteractionScope,
     *,
     original_accessible_name: str,
     retry: Callable[[re.Pattern[str]], None],
