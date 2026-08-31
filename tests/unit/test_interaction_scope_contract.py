@@ -37,12 +37,8 @@ def test_current_recovery_entrypoints_use_declared_interaction_scope() -> None:
 
     assert scope_type is not None
 
-    test_id_hints = get_type_hints(
-        playwright_adapter.recover_test_id_action
-    )
-    role_link_hints = get_type_hints(
-        playwright_adapter.recover_role_link_click
-    )
+    test_id_hints = get_type_hints(playwright_adapter.recover_test_id_action)
+    role_link_hints = get_type_hints(playwright_adapter.recover_role_link_click)
 
     assert test_id_hints["page"] == scope_type
     assert role_link_hints["page"] == scope_type
