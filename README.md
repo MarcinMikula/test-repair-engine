@@ -15,9 +15,10 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 8 closed - bounded semantic `ROLE_LINK` + `CLICK` recovery is now
-validated alongside the existing `TEST_ID` recovery boundary, including the
-final cross-repository merged-main integration.**
+**Sprint 9 branch acceptance is complete - the existing `TEST_ID` and
+`ROLE_LINK` recovery authority now has an explicit Playwright interaction-scope
+contract for `Page`, `Frame`, and `FrameLocator`. No new iframe-healing
+algorithm or automatic frame discovery was added.**
 
 The current runtime remains deliberately narrow. TestRepairEngine recovers
 qualified logical Playwright `TEST_ID` interaction failures: zero-match locator
@@ -74,7 +75,14 @@ Current validated implementation includes:
 - bounded `ROLE_LINK` + `CLICK` accessible-name insertion recovery with a unique
   visible-and-enabled candidate and no LLM escalation,
 - fail-closed protection against actionability-to-locator redirection,
-- independent PhoenixQA, Toolshop and merged-main validation.
+- independent PhoenixQA, Toolshop and merged-main validation,
+- explicit `PlaywrightInteractionScope = Page | Frame | FrameLocator` for the
+  current runtime recovery entrypoints,
+- framework-owned interaction-scope routing while Page lifecycle remains owned
+  by the real outer `Page`,
+- controlled branch-browser acceptance for both `Frame` and `FrameLocator`
+  using `TEST_ID` + `FILL` and `ROLE_LINK` + `CLICK`, with finalized
+  `RepairRecord.test_result=passed` and zero LLM calls.
 
 Native Playwright/framework behavior remains first authority. The LLM is only a
 bounded proposal mechanism, and the unchanged original test remains the final
@@ -556,6 +564,58 @@ Authoritative both-merged-main closure:
 
 Post-closure hygiene changed documentation/formatting only and did not reopen the
 validated runtime authority.
+
+### Sprint 9 - branch acceptance complete
+
+Sprint 9 did not begin with a pre-authorized iframe capability. Qualification
+first asked whether the existing runtime had a real browsing-context gap.
+
+The evidence chain was:
+
+```text
+S9.3 CONTROLLED
+-> unchanged TRE recovered TEST_ID drift when given the correct Frame
+-> top-level Page remained isolated
+-> no new healer justified
+
+S9.4 PUBLIC_EXTERNAL
+-> the same behavior reproduced on a real public iframe structure
+-> locator drift was controlled inside the browser session
+-> this was not commercial validation
+
+S9.5 CONTROLLED
+-> FrameLocator supported both current TRE locator families
+-> BasePage lifecycle methods were not a valid FrameLocator contract
+-> interaction scope and Page lifecycle required separate ownership
+
+S9.6 / S9.7
+-> justified RED
+-> explicit Page | Frame | FrameLocator interaction-scope contract
+-> BasePage kept a real Page and gained optional interaction_scope
+-> no repair algorithm or frame discovery added
+
+S9.8
+-> TRE 122/122 + full Ruff PASS
+-> framework 169/169 after one classified transient Swagger timeout
+-> cross-repository contract probe PASS
+
+S9.9 CONTROLLED BRANCH ACCEPTANCE
+-> Frame PASS
+-> FrameLocator PASS
+-> TEST_ID + FILL PASS
+-> ROLE_LINK + CLICK PASS
+-> 2 unchanged pytest tests PASS
+-> 4 finalized RepairRecords with test_result=passed
+-> LLM calls 0
+```
+
+The supported claim remains bounded: TRE can operate inside an explicitly
+supplied Playwright `Page`, `Frame`, or `FrameLocator` interaction scope for its
+already-qualified recovery families. TRE does not discover frames, choose a
+browsing context, or claim general iframe healing.
+
+Commercial / enterprise validation of this interaction-scope contract remains
+outstanding.
 
 ### Current frontier
 
