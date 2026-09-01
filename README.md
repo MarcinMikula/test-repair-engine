@@ -15,10 +15,18 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 9 branch acceptance is complete - the existing `TEST_ID` and
-`ROLE_LINK` recovery authority now has an explicit Playwright interaction-scope
-contract for `Page`, `Frame`, and `FrameLocator`. No new iframe-healing
-algorithm or automatic frame discovery was added.**
+**Sprint 10.1 release-consumer qualification is complete. The current
+`0.1.0.dev0` product was built as a normal wheel, installed into a clean
+non-editable consumer environment, discovered through its installed pytest
+entry point, and exercised through a frozen `qa-automation-framework`
+snapshot. With the same controlled locator drift and unchanged business test,
+TRE disabled produced the expected Playwright failure and the installed TRE
+wheel recovered the interaction and allowed the original test to pass. No
+product correction or LLM call was required.**
+
+Sprint 9 previously established the explicit Playwright interaction-scope
+contract for `Page`, `Frame`, and `FrameLocator` without adding iframe
+discovery or a new iframe-healing algorithm.
 
 The current runtime remains deliberately narrow. TestRepairEngine recovers
 qualified logical Playwright `TEST_ID` interaction failures: zero-match locator
@@ -60,6 +68,9 @@ independent of the bounded candidate shortlist.
 Current validated implementation includes:
 
 - installable Python package and opt-in pytest runtime integration,
+- clean non-editable wheel installation and installed pytest-plugin discovery,
+- frozen-framework consumer runtime proof using the installed wheel rather than
+  TestRepairEngine source from a development checkout,
 - strict contracts and immutable versioned RepairRecord persistence,
 - deterministic logical `TEST_ID` candidate ranking,
 - default `data-testid` plus explicit custom physical test-id attribute support,
@@ -260,6 +271,26 @@ too-broad ambiguity and failed browser retry all fail closed.
 
 Sprint 2 does not add reflection, a second judge, self-correction chat, a model
 fallback chain or repeated repair attempts.
+
+## Consumer installation
+
+TestRepairEngine is designed to be consumed as an installed Python package,
+not by placing its repository on `PYTHONPATH`.
+
+Before the first public `0.1.0` release is created, release qualification uses
+a locally built wheel directly, for example:
+
+```powershell
+python -m pip install path\to\test_repair_engine-<version>-py3-none-any.whl
+```
+
+Sprint 10.1 proved that a clean non-editable installation exposes the package
+from consumer `site-packages`, registers exactly one
+`test-repair-engine -> test_repair_engine.pytest_plugin` pytest entry point,
+and works through the supported `qa-automation-framework` runtime seam.
+
+No PyPI or GitHub Release installation command is claimed until such a release
+actually exists.
 
 ## pytest activation
 
@@ -565,7 +596,7 @@ Authoritative both-merged-main closure:
 Post-closure hygiene changed documentation/formatting only and did not reopen the
 validated runtime authority.
 
-### Sprint 9 - branch acceptance complete
+### Sprint 9 - complete
 
 Sprint 9 did not begin with a pre-authorized iframe capability. Qualification
 first asked whether the existing runtime had a real browsing-context gap.
@@ -617,7 +648,54 @@ browsing context, or claim general iframe healing.
 Commercial / enterprise validation of this interaction-scope contract remains
 outstanding.
 
+### Sprint 10.1 - complete
+
+Qualified the current product as a distributable consumer dependency without
+changing TestRepairEngine or framework product source.
+
+S10.1A authoritative clean-install closure:
+
+```text
+run-20260901T162800Z
+
+frozen TRE source
+-> wheel build
+-> clean non-editable consumer venv
+-> import from consumer site-packages
+-> installed pytest entry point
+-> pytest CLI plugin discovery
+-> PASS
+```
+
+S10.1B authoritative framework-consumer runtime proof:
+
+```text
+run-20260901T163319Z
+
+frozen qa-automation-framework snapshot
++ exact installed TRE wheel
+
+TRE OFF
+-> unchanged framework business test FAIL at search-input
+
+TRE ON
+-> search-input -> catalog-search-input
+-> heuristic recovery
+-> unchanged framework business test PASS
+-> RepairRecord runtime_result=recovered
+-> RepairRecord test_result=passed
+-> LLM calls 0
+```
+
+The qualification found no TestRepairEngine product defect and required no
+product correction.
+
 ### Current frontier
+
+Release preparation is the active frontier. Documentation and release evidence
+must first match the capability actually proved, and the final release gate
+must decide which distribution checks belong in durable CI before `0.1.0`
+is tagged.
 
 The next capability is not pre-authorized merely because another sprint starts.
 New work begins with qualification: define failure class, risk, seam, oracle,

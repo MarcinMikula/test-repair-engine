@@ -1223,3 +1223,94 @@ authority.
 Sprint 8 therefore does not justify generic role healing, button healing, broad
 accessible-name fuzzy matching or machine escalation. Those remain future
 frontiers that must earn their own qualification evidence.
+
+---
+
+## Sprint 10 — qualify the distributed artifact, not only the checkout
+
+**Review date:** 2026-09-01
+**Status:** Validated
+
+### Problem
+
+Repository tests and editable installation can prove development behavior while
+still missing defects in packaging, installed pytest entry points, or use as a
+real external framework dependency.
+
+The release question is therefore stronger than:
+
+```text
+does TestRepairEngine pass from its checkout?
+```
+
+It also asks:
+
+```text
+can a frozen TestRepairEngine revision become a normal distribution artifact,
+install cleanly outside the repository, and recover a real unchanged framework
+test as an installed library?
+```
+
+### Evidence
+
+S10.1A authoritative closure:
+
+```text
+run-20260901T162800Z
+```
+
+A wheel built from frozen source installed non-editably into a clean consumer
+environment. Import provenance resolved to consumer `site-packages`; installed
+distribution metadata and pytest plugin discovery passed.
+
+The route to that closure also exposed several failures in the validation
+apparatus rather than in TestRepairEngine:
+
+- an overlong Windows staging path broke the first wheel-build harness,
+- PowerShell native stderr handling interrupted one observation before the real
+  process result was known,
+- a fresh venv with pip 24.0 required explicit system truststore use in the
+  current environment,
+- a multiline `python -c` probe was corrupted by PowerShell/native quoting.
+
+Those failures were preserved and classified instead of being used to justify
+product changes.
+
+S10.1B authoritative run:
+
+```text
+run-20260901T163319Z
+```
+
+The exact wheel was installed into a fresh environment beside dependencies from
+a frozen `qa-automation-framework` snapshot. The same unchanged business test
+failed with TRE disabled at `search-input` and passed with TRE enabled after
+deterministic `search-input -> catalog-search-input` recovery. The finalized
+RepairRecord reported `runtime_result=recovered`, `test_result=passed`, and no
+LLM call.
+
+### Decision
+
+Release-facing qualification must distinguish three separate things:
+
+```text
+development checkout behavior
+distribution/install behavior
+real consumer runtime behavior
+```
+
+A failure in the harness, package-index trust, shell quoting, or another
+external environment boundary is not a TestRepairEngine product defect unless
+evidence shows that the supported product behavior itself is violated.
+
+The product must not be changed merely to rescue the qualification procedure.
+
+### Consequence
+
+Before a stable release is claimed, TestRepairEngine should have evidence for
+the distribution artifact actually intended for consumers, not only editable
+development installs.
+
+Whether this wheel/consumer qualification becomes a permanent automated CI gate
+belongs to the release-gate decision. S10.1 establishes the evidence and the
+boundary; it does not silently widen CI or runtime scope.
