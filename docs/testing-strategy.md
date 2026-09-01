@@ -275,6 +275,84 @@ This validates only the bounded `ROLE_LINK` + `CLICK` insertion-expansion
 authority. It does not establish generic role healing, button healing, fuzzy
 accessible-name recovery, fill-by-role recovery, or LLM semantic selection.
 
+## Sprint 10.1 distribution and framework consumer qualification
+
+Sprint 10.1 qualified the release-facing consumer boundary without modifying
+TestRepairEngine product behavior.
+
+### S10.1A - clean distribution consumer
+
+Authoritative closure:
+
+```text
+run-20260901T162800Z
+```
+
+The frozen TestRepairEngine source was built into a wheel and installed
+non-editably into a fresh consumer virtual environment. Qualification proved:
+
+- the package imports from consumer `site-packages`,
+- distribution metadata reports the expected installed version,
+- exactly one pytest entry point targets
+  `test_repair_engine.pytest_plugin`,
+- pytest discovers the installed TestRepairEngine CLI options,
+- the TestRepairEngine repository remains unchanged.
+
+Earlier S10.1A attempts exposed validation-harness and environment problems,
+including Windows path length, native-process stderr handling, old-pip
+certificate trust behavior and PowerShell/native quoting. Those observations
+were not converted into product defects.
+
+### S10.1B - frozen framework consumer runtime
+
+Authoritative run:
+
+```text
+run-20260901T163319Z
+```
+
+The qualification used:
+
+```text
+TestRepairEngine
+-> exact previously built wheel
+-> installed into fresh consumer venv
+
+qa-automation-framework
+-> exact frozen git-archive snapshot
+-> no runtime use of the local framework working tree
+```
+
+With controlled drift:
+
+```text
+search-input -> catalog-search-input
+```
+
+the unchanged framework business test produced:
+
+```text
+TRE OFF
+-> pytest exit 1
+-> expected Playwright locator timeout
+
+TRE ON
+-> pytest exit 0
+-> heuristic replacement selected
+-> one runtime recovery
+-> unchanged original test PASS
+-> RepairRecord runtime_result = recovered
+-> RepairRecord test_result = passed
+-> LLM call_attempted = false
+```
+
+This establishes the supported consumer claim for the tested release candidate:
+TRE can operate as an installed external library through the existing framework
+runtime seam. It does not establish arbitrary framework compatibility or broader
+healing authority.
+
+No product finding or correction was required.
+
 ## STLC alignment
 
 Each runtime repair slice follows:
@@ -362,6 +440,11 @@ A separate Python 3.12 browser job installs Chromium and runs the E2E repair
 slice. The `browser-repair` job is bounded to 30 minutes and the Chromium
 installation step to 15 minutes so a stalled package mirror cannot leave the
 validation pending for hours.
+
+Current CI still installs the repository in editable development mode.
+S10.1 separately qualified a built wheel and clean consumer runtime. Whether
+that distribution proof becomes a permanent CI release gate is intentionally a
+later release-gate decision rather than an S10.2 documentation change.
 
 ## Evidence integrity
 

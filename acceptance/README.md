@@ -561,3 +561,94 @@ TestRepairEngine PR #20
 
 Those hygiene changes did not alter the validated runtime behavior or reopen the
 Sprint 8 acceptance claim.
+
+---
+
+## Sprint 10.1 release-consumer qualification
+
+Sprint 10.1 qualified the existing product for release-style consumption before
+any `0.1.0` version bump.
+
+### S10.1A - clean wheel consumer
+
+Authoritative closure:
+
+```text
+run-20260901T162800Z
+```
+
+The frozen TestRepairEngine source produced a normal wheel that was installed
+non-editably into a fresh virtual environment. Import provenance, installed
+distribution metadata, pytest entry-point metadata and actual pytest CLI plugin
+discovery all passed.
+
+Earlier attempts remain useful evidence of validation-harness/environment
+failures rather than TestRepairEngine product failures:
+
+```text
+long Windows build path
+-> wheel staging failure
+
+native stderr handling
+-> PowerShell harness interruption
+
+fresh pip 24.0 certificate trust
+-> dependency installation failure until system truststore was enabled
+
+python -c quoting
+-> malformed validation probe
+```
+
+None justified a product correction.
+
+### S10.1B - installed TRE through frozen framework
+
+Authoritative run:
+
+```text
+run-20260901T163319Z
+```
+
+Frozen identities:
+
+```text
+TestRepairEngine:
+14cbf44352e01a2c450bcf7ecea558477e453396
+
+qa-automation-framework:
+522c1f7e597535ae0e541ec854200927234e7d5a
+```
+
+Runtime oracle:
+
+```text
+controlled drift:
+search-input -> catalog-search-input
+
+TRE OFF
+-> unchanged framework test FAIL
+-> Playwright timeout on search-input
+
+TRE ON using installed wheel only
+-> heuristic recovery
+-> catalog-search-input
+-> unchanged framework test PASS
+-> one RepairRecord
+-> runtime_result=recovered
+-> test_result=passed
+-> LLM calls 0
+```
+
+Both repositories remained unchanged and clean.
+
+### S10.1 conclusion
+
+```text
+distribution consumer qualification -> PASS
+framework consumer runtime           -> PASS
+product correction                   -> NONE
+new TRE finding                      -> NONE
+```
+
+S10.1 therefore closes as positive release-consumer evidence, not as defect
+remediation.
