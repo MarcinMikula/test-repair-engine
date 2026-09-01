@@ -124,6 +124,35 @@ generic non-timeout Playwright error or failed count confirmation
 The framework owns this classifier because it owns normal Playwright execution.
 Runtime repair remains outside the successful-path dependency chain.
 
+### Interaction-scope ownership
+
+The current recovery entrypoints accept an explicit Playwright interaction
+scope:
+
+```text
+Page | Frame | FrameLocator
+```
+
+The caller owns selection of that scope. TRE does not search for iframes,
+switch browsing contexts, or infer which frame contains the intended element.
+
+The supported framework seam separates:
+
+```text
+real Page
+-> navigation, URL, title, load-state lifecycle
+
+interaction_scope
+-> locator interaction
+-> failure classification
+-> bounded TRE handoff
+```
+
+When no narrower scope is supplied, the framework uses the Page itself as the
+interaction scope. S9.3, S9.4, S9.5 and S9.9 established this boundary for the
+already-qualified `TEST_ID` and `ROLE_LINK` families. They did not authorize
+automatic frame discovery or a new iframe-healing algorithm.
+
 ## Sprint 1 deterministic candidate model
 
 Sprint 1 handles `LocatorKind.TEST_ID` only.
@@ -361,6 +390,10 @@ Implemented and validated in TRE / its supported framework seam:
   resolves exactly once,
 - bounded deterministic `ROLE_LINK` + `CLICK` accessible-name insertion
   recovery with unique visible-and-enabled authority,
+- explicit `Page | Frame | FrameLocator` interaction-scope contract for current
+  recovery entrypoints, with caller-owned browsing-context selection,
+- controlled Frame and FrameLocator framework-to-TRE browser acceptance with
+  finalized passing RepairRecords and zero LLM calls,
 - controlled, frozen real-app, live external and merged-main validation.
 
 Still outside the current boundary:
@@ -368,6 +401,7 @@ Still outside the current boundary:
 - other non-test-id locator families beyond qualified `ROLE_LINK` + `CLICK`,
 - generic timing/actionability healing,
 - source-code patching,
+- automatic iframe discovery, browsing-context selection, or frame switching,
 - TestCartographer compatibility interpretation,
 - API/SOM repair,
 - broad pytest-xdist/concurrency guarantees beyond S5.1,

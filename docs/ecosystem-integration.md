@@ -54,10 +54,16 @@ ROLE_LINK
 -> original exact accessible name
 
 both
+-> explicit interaction scope: Page, Frame, or FrameLocator
 -> Page Object class when available
 -> mechanical helper method when available
 -> optional project/context traceability
 ```
+
+The framework or project selects the interaction scope before TRE is called.
+TRE does not discover frames or switch browsing contexts. `BasePage` keeps the
+real outer `Page` for navigation and metadata lifecycle while its mechanical
+interaction helpers may route through an explicitly supplied narrower scope.
 
 The runtime callback used to retry a fill may close over the input value, but the
 value is not inspected or persisted by TestRepairEngine.
@@ -67,6 +73,24 @@ not authorize handoff, TRE cannot verify the original-target safety boundary,
 no safe candidate exists, or the retry cannot be recovered, the original
 Playwright failure remains controlling.
 
+### Browsing-context authority
+
+```text
+project/application knowledge
+-> selects Page / Frame / FrameLocator
+
+framework
+-> performs the normal interaction in that scope
+-> classifies the observed failure
+-> passes the same scope to TRE when qualified
+
+TRE
+-> evaluates and retries only inside the supplied scope
+```
+
+S9 branch acceptance validated this separation for the existing `TEST_ID` and
+`ROLE_LINK` capabilities. It did not grant TRE authority to discover iframes or
+choose a browsing context.
 ## Boundary 2 — runtime recovery
 
 The runtime repairs one qualified interaction at a time. Current locator
