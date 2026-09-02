@@ -441,10 +441,36 @@ slice. The `browser-repair` job is bounded to 30 minutes and the Chromium
 installation step to 15 minutes so a stalled package mirror cannot leave the
 validation pending for hours.
 
-Current CI still installs the repository in editable development mode.
-S10.1 separately qualified a built wheel and clean consumer runtime. Whether
-that distribution proof becomes a permanent CI release gate is intentionally a
-later release-gate decision rather than an S10.2 documentation change.
+The development-oriented `quality` and `browser-repair` jobs continue to
+install the repository in editable mode because they exercise source-checkout
+quality and runtime behavior.
+
+S10.3 adds a separate `distribution-consumer` matrix on Python 3.11 and 3.12.
+That job deliberately tests a different boundary:
+
+```text
+repository checkout
+-> build one normal wheel
+-> create fresh consumer virtual environment
+-> install the wheel non-editably with dependencies
+-> pip check
+-> leave the repository working directory
+-> import TestRepairEngine from the consumer environment
+-> compare installed distribution version with pyproject metadata
+-> require exactly one pytest11 entry point
+-> require the expected TestRepairEngine pytest entry-point target
+-> invoke pytest --help from outside the checkout
+-> require the installed TRE CLI options
+```
+
+The version check is metadata-driven rather than hard-coded to
+`0.1.0.dev0`, so the same gate remains valid after a release version bump.
+
+The S10.1B frozen `qa-automation-framework` consumer runtime proof remains
+acceptance/release evidence rather than a permanent TRE CI dependency. Regular
+TestRepairEngine CI owns its distribution/install boundary; it does not make the
+TRE repository depend on another project's current state merely to validate
+packaging.
 
 ## Evidence integrity
 

@@ -70,3 +70,116 @@ jobs:
 
       - name: E2E locator repair
         run: python -m pytest -m e2e -v
+
+  distribution-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "build>=1.2,<2"
+          rm -rf dist
+          python -m build --wheel --outdir dist
+          python - <<'PY'
+          from pathlib import Path
+
+          wheels = sorted(Path("dist").glob("test_repair_engine-*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one TRE wheel, found: {wheels}")
+          print(f"wheel={wheels[0]}")
+          PY
+
+      - name: Install wheel into clean consumer
+        run: |
+          python -m venv "$RUNNER_TEMP/tre-consumer"
+          "$RUNNER_TEMP/tre-consumer/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/tre-consumer/bin/python" -m pip install dist/test_repair_engine-*.whl
+          "$RUNNER_TEMP/tre-consumer/bin/python" -m pip check
+
+      - name: Verify installed distribution and pytest plugin
+        run: |
+          mkdir -p "$RUNNER_TEMP/tre-consumer-probe"
+          cd "$RUNNER_TEMP/tre-consumer-probe"
+
+          "$RUNNER_TEMP/tre-consumer/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import os
+          import sys
+          import tomllib
+          from importlib.metadata import distribution, entry_points
+          from pathlib import Path
+
+          import test_repair_engine
+
+          workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          consumer_prefix = Path(sys.prefix).resolve()
+          package_path = Path(test_repair_engine.__file__).resolve()
+
+          if workspace == package_path or workspace in package_path.parents:
+              raise SystemExit(
+                  f"TRE imported from checkout instead of consumer env: {package_path}"
+              )
+
+          if consumer_prefix != package_path and consumer_prefix not in package_path.parents:
+              raise SystemExit(
+                  f"TRE import is outside consumer env: {package_path}"
+              )
+
+          with (workspace / "pyproject.toml").open("rb") as handle:
+              expected_version = tomllib.load(handle)["project"]["version"]
+
+          installed = distribution("test-repair-engine")
+          if installed.version != expected_version:
+              raise SystemExit(
+                  f"version mismatch: installed={installed.version} "
+                  f"expected={expected_version}"
+              )
+
+          tre_entries = [
+              entry
+              for entry in entry_points(group="pytest11")
+              if entry.name == "test-repair-engine"
+          ]
+
+          if len(tre_entries) != 1:
+              raise SystemExit(
+                  f"expected exactly one TRE pytest entry point, found: {tre_entries}"
+              )
+
+          if tre_entries[0].value != "test_repair_engine.pytest_plugin":
+              raise SystemExit(
+                  f"unexpected TRE pytest entry point: {tre_entries[0].value}"
+              )
+
+          print(f"package_path={package_path}")
+          print(f"consumer_prefix={consumer_prefix}")
+          print(f"installed_version={installed.version}")
+          print(
+              "pytest_entry_point="
+              f"{tre_entries[0].name} -> {tre_entries[0].value}"
+          )
+          PY
+
+          "$RUNNER_TEMP/tre-consumer/bin/python" -m pytest --help > pytest-help.txt
+
+          grep -E -- '^[[:space:]]+--test-repair-engine([[:space:]=]|$)' pytest-help.txt
+          grep -E -- '^[[:space:]]+--test-repair-record-dir([[:space:]=]|$)' pytest-help.txt
+          grep -E -- '^[[:space:]]+--test-repair-engine-llm([[:space:]=]|$)' pytest-help.txt
