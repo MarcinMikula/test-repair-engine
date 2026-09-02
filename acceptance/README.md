@@ -652,3 +652,76 @@ new TRE finding                      -> NONE
 
 S10.1 therefore closes as positive release-consumer evidence, not as defect
 remediation.
+
+---
+
+## Sprint 10.3 permanent distribution-consumer CI gate
+
+Sprint 10.3 converted the release-critical, repository-owned portion of S10.1
+into a permanent CI boundary before the `0.1.0` release version bump.
+
+The decision deliberately split two kinds of evidence:
+
+```text
+cheap repository-owned distribution/install proof
+-> permanent TestRepairEngine CI
+
+full frozen qa-automation-framework consumer runtime proof
+-> acceptance/release evidence
+-> not a regular cross-repository CI dependency
+```
+
+Implementation commit:
+
+```text
+c9ac412a8f0df0eeeac1df02edd786fbe11bef3c
+```
+
+PR #25 acceptance used GitHub Actions `tests` run #58. All five required jobs
+passed:
+
+```text
+quality (3.11)                PASS
+quality (3.12)                PASS
+browser-repair                PASS
+distribution-consumer (3.11)  PASS
+distribution-consumer (3.12)  PASS
+```
+
+The new distribution jobs each exercised:
+
+```text
+build exactly one normal wheel
+-> create fresh consumer venv
+-> install wheel non-editably
+-> pip check
+-> leave repository working directory
+-> import TRE from consumer site-packages
+-> compare installed distribution version with pyproject metadata
+-> require exactly one TRE pytest11 entry point
+-> require test_repair_engine.pytest_plugin
+-> invoke pytest --help from the consumer environment
+-> require the installed TRE CLI options
+```
+
+After merge, main moved to:
+
+```text
+971d6acb09105238448272d3fefcfeec08fe2438
+```
+
+The independent push-triggered GitHub Actions `tests` run #59 then repeated the
+same five-job matrix on merged `main`; all five jobs passed again.
+
+Verdict:
+
+```text
+permanent distribution-consumer gate -> PASS
+PR execution                         -> PASS
+merged-main execution                -> PASS
+runtime product correction           -> NONE
+new TRE finding                      -> NONE
+```
+
+S10.3 therefore closes the release-facing CI decision required before the
+`0.1.0` version bump.

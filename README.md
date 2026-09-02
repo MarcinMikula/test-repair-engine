@@ -15,14 +15,15 @@ and simple integration over speculative repair taxonomies.
 
 ## Status
 
-**Sprint 10.1 release-consumer qualification is complete. The current
-`0.1.0.dev0` product was built as a normal wheel, installed into a clean
-non-editable consumer environment, discovered through its installed pytest
-entry point, and exercised through a frozen `qa-automation-framework`
-snapshot. With the same controlled locator drift and unchanged business test,
-TRE disabled produced the expected Playwright failure and the installed TRE
-wheel recovered the interaction and allowed the original test to pass. No
-product correction or LLM call was required.**
+**Sprint 10 pre-release qualification through S10.3 is complete. The `0.1.0`
+release candidate preserves the S10.1 clean-wheel and frozen-framework consumer
+proof and adds the permanent S10.3 `distribution-consumer` CI matrix on Python
+3.11 and 3.12. The PR gate and merged-main gate both built a normal wheel,
+installed it non-editably into a clean consumer environment, verified installed
+package provenance, distribution metadata, pytest entry-point registration and
+CLI discovery, while the existing quality and browser-repair gates remained
+green. No product correction or LLM call was required for the completed
+pre-release qualification.**
 
 Sprint 9 previously established the explicit Playwright interaction-scope
 contract for `Page`, `Frame`, and `FrameLocator` without adding iframe
@@ -277,11 +278,12 @@ fallback chain or repeated repair attempts.
 TestRepairEngine is designed to be consumed as an installed Python package,
 not by placing its repository on `PYTHONPATH`.
 
-Before the first public `0.1.0` release is created, release qualification uses
-a locally built wheel directly, for example:
+For `v0.1.0`, the consumer artifact under release qualification is the wheel
+built from the release source. A local wheel can be installed directly, for
+example:
 
 ```powershell
-python -m pip install path\to\test_repair_engine-<version>-py3-none-any.whl
+python -m pip install path\to\test_repair_engine-0.1.0-py3-none-any.whl
 ```
 
 Sprint 10.1 proved that a clean non-editable installation exposes the package
@@ -289,8 +291,12 @@ from consumer `site-packages`, registers exactly one
 `test-repair-engine -> test_repair_engine.pytest_plugin` pytest entry point,
 and works through the supported `qa-automation-framework` runtime seam.
 
-No PyPI or GitHub Release installation command is claimed until such a release
-actually exists.
+Sprint 10.3 made the cheap distribution/install portion of that proof a
+permanent CI gate on Python 3.11 and 3.12. The full frozen-framework consumer
+runtime proof remains acceptance/release evidence rather than a regular
+cross-repository CI dependency.
+
+No PyPI installation path is claimed for `v0.1.0`.
 
 ## pytest activation
 
@@ -692,15 +698,23 @@ product correction.
 
 ### Current frontier
 
-Release preparation is the active frontier. Documentation and release evidence
-must first match the capability actually proved, and the final release gate
-must decide which distribution checks belong in durable CI before `0.1.0`
-is tagged.
+The runtime capability and release-facing distribution gate required for
+`v0.1.0` are complete. The active frontier is release closure only:
 
-The next capability is not pre-authorized merely because another sprint starts.
-New work begins with qualification: define failure class, risk, seam, oracle,
-ownership and supported authority tier, then prove a real gap exists before
-product implementation.
+```text
+0.1.0 metadata
+-> final five-job CI on the release candidate
+-> merge to main
+-> tag v0.1.0
+-> GitHub Release
+```
+
+No new product capability is authorized before that release closure.
+
+The next capability after `v0.1.0` is not pre-authorized merely because another
+sprint starts. New work begins with qualification: define failure class, risk,
+seam, oracle, ownership and supported authority tier, then prove a real gap
+exists before product implementation.
 
 Potential later directions:
 
