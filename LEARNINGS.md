@@ -1314,3 +1314,60 @@ development installs.
 Whether this wheel/consumer qualification becomes a permanent automated CI gate
 belongs to the release-gate decision. S10.1 establishes the evidence and the
 boundary; it does not silently widen CI or runtime scope.
+
+### S10.3 decision - automate the cheap owned boundary
+
+S10.3 resolved the open release-gate question from S10.1.
+
+The durable split is:
+
+```text
+repository-owned artifact/install checks
+-> cheap enough
+-> deterministic
+-> stable ownership
+-> permanent CI
+
+full external framework runtime qualification
+-> materially stronger acceptance evidence
+-> depends on another repository and controlled drift
+-> keep as release/acceptance evidence
+-> do not make every TRE CI run depend on it
+```
+
+The new `distribution-consumer` matrix on Python 3.11 and 3.12 therefore builds
+one wheel, installs it into a fresh consumer environment, verifies dependency
+health, import provenance, installed version metadata, pytest entry-point
+registration and actual pytest CLI discovery.
+
+This is intentionally different from the existing editable-install quality and
+browser jobs. Keeping both boundaries avoids treating a green development
+checkout as proof that the distributed artifact is healthy.
+
+The release lesson is:
+
+> When a manually qualified release boundary is deterministic, cheap and owned
+> by the repository, promote that portion into CI. Keep expensive cross-project
+> evidence at the acceptance layer unless regular coupling is itself a supported
+> product contract.
+
+### Parked post-0.1.0 CI housekeeping - GitHub Actions Node runtime
+
+During the S10.3 GitHub Actions runs, GitHub emitted a deprecation warning that
+the current `actions/checkout@v4` and `actions/setup-python@v5` action versions
+target Node.js 20 while hosted runners are forcing them onto Node.js 24.
+
+This warning did not fail any TRE job and did not invalidate the distribution
+proof, so it is explicitly **not a `v0.1.0` blocker**.
+
+Parked follow-up after the release:
+
+```text
+review current supported versions of actions/checkout and actions/setup-python
+-> update the workflow when appropriate
+-> verify the existing five-job CI remains green
+-> remove the Node 20 deprecation warning
+```
+
+Treat this as workflow housekeeping, not as a TestRepairEngine runtime defect or
+reason to expand the `v0.1.0` release scope.
