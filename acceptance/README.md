@@ -725,3 +725,189 @@ new TRE finding                      -> NONE
 
 S10.3 therefore closes the release-facing CI decision required before the
 `0.1.0` version bump.
+
+---
+
+## Post-release v0.1.0 quasi-UAT — published artifact consumer validation
+
+**Review date:** 2026-09-03
+**Status:** CLOSED / PASS
+**Authoritative UAT run:** `run-20260903T170724Z`
+
+This post-release validation asked a narrower product question than the release
+qualification:
+
+> Can the exact wheel published in GitHub Release `v0.1.0` be installed as a
+> normal dependency beside the intended frozen framework consumer and recover
+> the unchanged business test only when runtime repair is explicitly enabled?
+
+The release was already formally published before this run. This campaign is
+therefore additional product validation, not a retroactive release gate.
+
+### Frozen boundaries
+
+```text
+TestRepairEngine main
+399733cc8caf9a60fecd1629caf3fa3c60170566
+
+qa-automation-framework main
+522c1f7e597535ae0e541ec854200927234e7d5a
+
+published wheel
+test_repair_engine-0.1.0-py3-none-any.whl
+
+published wheel SHA256
+0fb657884bcd8d9719080d68730547879dc7be2981dc6680e6bc1228a4297428
+```
+
+The framework business test and Page Object remained unchanged throughout the
+campaign. The controlled application seam changed only the search-input
+`data-testid`:
+
+```text
+Page Object expects
+search-input
+
+controlled application state
+catalog-search-input
+```
+
+### Validation chain
+
+```text
+Gate 1 — preflight
+-> PASS
+-> framework HEAD/origin-main exact and clean
+-> consumer seam source blobs exact
+-> published wheel downloaded from GitHub Release
+-> wheel SHA256 exact
+-> release manifest SHA256 exact
+
+Gate 2 — healthy consumer baseline
+-> PASS
+-> fresh Python 3.12 consumer environment outside both repositories
+-> frozen framework requirements installed
+-> published TRE wheel installed non-editably
+-> import provenance: consumer site-packages
+-> pip check PASS
+-> TRE pytest entry point discovered
+-> Chromium ready
+-> healthy application state
+-> TRE installed but disabled
+-> unchanged business E2E: 1 passed
+-> RepairRecords: 0
+
+Gate 3 — controlled fail-before
+-> PASS as expected RED evidence
+-> same framework / test / Page Object
+-> application exposes catalog-search-input
+-> TRE installed but disabled
+-> unchanged business E2E: 1 failed
+-> Playwright Locator.fill TimeoutError
+-> waiting for get_by_test_id("search-input")
+-> RepairRecords: 0
+-> repository mutation: NONE
+
+Gate 4 — controlled recovery
+-> PASS
+-> exact same drift and timeout as Gate 3
+-> exact same framework / test / Page Object / published wheel
+-> only authority change: --test-repair-engine
+-> unchanged business E2E: 1 passed
+-> exactly one finalized RepairRecord
+```
+
+The authoritative finalized RepairRecord reported:
+
+```text
+schema_version       0.2
+action               fill
+locator_kind         test_id
+original_locator     search-input
+replacement_locator  catalog-search-input
+repair_method        heuristic
+candidate_count      22
+selected_score       0.791667
+runtime_result       recovered
+test_result          passed
+LLM enabled          false
+LLM eligible         false
+LLM call_attempted   false
+LLM outcome          not_called
+```
+
+This preserves the product's central result distinction:
+
+```text
+runtime interaction recovered
+!=
+test automatically accepted
+
+runtime_result = recovered
+-> unchanged original test continues
+-> original assertions execute
+-> test_result = passed
+```
+
+### Evidence preservation
+
+The authoritative evidence bundle is stored outside the repository in accordance
+with the acceptance rules:
+
+```text
+TestRepairEngine-local-artifacts/
+└── post-release-v0.1.0-quasi-uat/
+    └── run-20260903T170724Z/
+```
+
+It contains the published release assets, distribution probe, healthy baseline
+output, controlled RED output, controlled GREEN output, the finalized
+RepairRecord, an evidence summary and file hashes.
+
+Three earlier evidence-closure verifier attempts stopped before bundle creation.
+They were harness failures, not TestRepairEngine failures:
+
+```text
+v1
+-> assumed UTF-8 when reading PowerShell-captured pytest text
+
+v2
+-> encoding heuristic still did not verify the real stored representation
+
+v3
+-> patching defect left the old UTF-8-only validation path active
+
+v4
+-> rebuilt verifier
+-> checks required pytest markers against raw UTF-8/UTF-16 byte forms
+-> validates RepairRecord and release hashes before creating the bundle
+-> PASS
+```
+
+No product code, framework code, test, scoring rule, retry policy, LLM policy,
+release artifact or repository state was changed to obtain the UAT PASS.
+
+### Conclusion and park decision
+
+The post-release quasi-UAT exposed no new TestRepairEngine product defect and
+opened no new `TRE-FIND-*`.
+
+The bounded claim is:
+
+> The exact published TestRepairEngine `v0.1.0` wheel can be installed into a
+> fresh environment beside the frozen intended framework consumer; with the
+> tested controlled zero-match `TEST_ID + FILL` drift, TRE disabled preserves the
+> original Playwright failure, while TRE enabled recovers deterministically once,
+> records truthful evidence, and lets the unchanged business test determine the
+> final PASS.
+
+This does not establish arbitrary locator recovery, generic DOM repair, generic
+actionability healing, unrestricted concurrency or universal application
+compatibility.
+
+With the first release, distribution gates and this post-release consumer
+validation closed, active feature development on TestRepairEngine is now
+**PARKED**. New TRE work should begin only from new evidence, a real consumer
+problem, a security/maintenance obligation or another explicitly justified
+requirement, and should enter a new SDLC slice rather than extending `v0.1.0`
+speculatively.
