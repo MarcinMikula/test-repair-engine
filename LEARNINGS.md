@@ -1371,3 +1371,128 @@ review current supported versions of actions/checkout and actions/setup-python
 
 Treat this as workflow housekeeping, not as a TestRepairEngine runtime defect or
 reason to expand the `v0.1.0` release scope.
+
+---
+
+## Post-release v0.1.0 — validate the published artifact before parking the product
+
+**Review date:** 2026-09-03
+**Status:** Validated / product parked
+
+### Why another validation after release?
+
+Sprint 10 had already qualified a built wheel and a frozen framework consumer
+before `v0.1.0` was published. Release closure then proved the final tag, release
+wheel, clean consumer installation and GitHub Release asset identity.
+
+One useful question still remained different:
+
+```text
+qualified release candidate
+!=
+artifact actually published to consumers
+```
+
+The post-release quasi-UAT therefore reused the intended frozen
+`qa-automation-framework` consumer but downloaded and installed the exact
+published `v0.1.0` wheel.
+
+### Evidence
+
+Authoritative UAT run:
+
+```text
+run-20260903T170724Z
+```
+
+The run deliberately separated four facts:
+
+```text
+published artifact and consumer identity
+-> exact / clean
+
+healthy application + TRE installed but OFF
+-> unchanged business test PASS
+
+controlled search-input -> catalog-search-input drift + TRE OFF
+-> unchanged business test FAIL
+-> Locator.fill TimeoutError
+-> zero RepairRecords
+
+same drift + same test + same wheel + TRE ON
+-> deterministic search-input -> catalog-search-input recovery
+-> exactly one retry
+-> unchanged business test PASS
+-> runtime_result=recovered
+-> test_result=passed
+-> LLM not called
+```
+
+This is stronger evidence than simply rerunning repository tests because the
+independent variable between the RED and GREEN controlled-drift runs was the
+runtime repair authority itself.
+
+### Closure-harness lesson
+
+The product UAT passed before evidence archival, but three successive closure
+verifier implementations failed while trying to reread PowerShell-captured log
+files.
+
+Those failures did not justify a product rerun or a TRE correction. The durable
+lesson is:
+
+```text
+product execution evidence
+!=
+later evidence-packaging verifier
+
+verifier failure
+-> classify the verifier
+-> preserve the already valid product run
+-> correct only the evidence tooling
+-> never manufacture a new product result unless original evidence is actually
+   missing or ambiguous
+```
+
+The first two verifier attempts made incorrect text-encoding assumptions. The
+third attempted fix did not replace the old UTF-8-only call path and therefore
+never exercised its new diagnostic logic. The authoritative fourth verifier was
+rebuilt around raw-byte marker checks for UTF-8/UTF-16 representations and
+created the immutable bundle only after all source evidence and RepairRecord
+checks passed.
+
+This is another example of the existing TRE validation rule: a harness defect is
+first-class engineering evidence, but it is not automatically a product finding.
+
+### Park decision
+
+`v0.1.0` now has evidence across:
+
+```text
+development checkout
+distribution/install boundary
+pytest plugin discovery
+real Playwright browser behavior
+controlled fail-before
+bounded deterministic recovery
+final pytest-result correlation
+frozen framework consumer integration
+exact published release artifact
+post-release consumer validation
+```
+
+That does not mean TestRepairEngine is universally complete. It means the
+current bounded product has enough evidence to stop adding capability merely
+because more capability is imaginable.
+
+Active TRE development is therefore parked after `v0.1.0`. A future change
+should start from a concrete trigger such as:
+
+- a real consumer failure or unsupported boundary that matters,
+- a reproducible safety or correctness issue,
+- dependency/platform maintenance,
+- a justified new integration requirement,
+- or evidence from the wider automation ecosystem.
+
+The next active engineering work can move to the framework consumer without
+turning TestRepairEngine into an ever-expanding general autonomous healer.
